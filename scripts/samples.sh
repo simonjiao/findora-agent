@@ -69,3 +69,12 @@ cargo run --release -- block --network qa01 --start 11290
 # 11298,1646890834,0,16
 # Show tendermint blocks of qa01 since specified height, used this command if you cares about all not just evm txns
 bash fetch_block.sh 11290
+
+# test contract deploy
+cargo run --release -- contract --optype deploy --network test --config ~/contract_deploy.json
+
+# test contract call
+cargo run --release -- contract --optype call --network test --config ~/contract_call.json
+
+# test contract query
+cargo run --release -- contract --optype query --network test --config ~/contract_query.json

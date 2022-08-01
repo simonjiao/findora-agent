@@ -6,6 +6,7 @@ use std::{
     cell::RefCell,
     cmp::Ordering,
     ops::{Mul, MulAssign, Sub},
+    path::PathBuf,
     str::FromStr,
     sync::{
         atomic::{AtomicU64, Ordering::Relaxed},
@@ -15,7 +16,7 @@ use std::{
 };
 
 use commands::*;
-use feth::{one_eth_key, utils::*, KeyPair, TestClient};
+use feth::{one_eth_key, parse_call_json, parse_deploy_json, parse_query_json, utils::*, KeyPair, TestClient};
 use log::{debug, error, info};
 use rayon::prelude::*;
 use web3::types::{Address, Block, BlockId, BlockNumber, TransactionId, H256, U256, U64};
@@ -35,6 +36,26 @@ fn eth_account(network: &str, timeout: Option<u64>, account: Address) {
     let balance = client.balance(account, None);
     let nonce = client.nonce(account, None);
     println!("{:?}: {} {:?}", account, balance, nonce);
+}
+fn eth_contract(network: &str, timeout: Option<u64>, optype: &ContractOP, config: &PathBuf) -> anyhow::Result<()> {
+    let network = real_network(network);
+    let client = TestClient::setup(network[0].clone(), timeout);
+    match optype {
+        ContractOP::Deploy => {
+            let deploy_json = parse_deploy_json(config)?;
+            client.contract_deploy(deploy_json)?;
+        }
+        ContractOP::Call => {
+            let call_json = parse_call_json(config)?;
+            client.contract_call(call_json)?;
+        }
+        ContractOP::Query => {
+            let query_json = parse_query_json(config)?;
+            client.contract_query(query_json)?;
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -235,7 +256,7 @@ fn fund_accounts(
     //std::fs::write("metrics.001", &data).unwrap();
 }
 
-fn main() -> web3::Result<()> {
+fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let cli = Cli::parse_args();
@@ -295,6 +316,16 @@ fn main() -> web3::Result<()> {
         }
         Some(Commands::Profiler { network, enable }) => {
             let _ = Cli::profiler(network.as_str(), *enable);
+            Ok(())
+        }
+        Some(Commands::Contract {
+            network,
+            optype,
+            config,
+            timeout,
+        }) => {
+            let rpc_url = network.get_url();
+            eth_contract(&rpc_url, *timeout, optype, config)?;
             Ok(())
         }
         Some(Commands::Test {

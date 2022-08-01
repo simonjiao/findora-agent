@@ -42,6 +42,13 @@ pub enum Network {
     Node(String),
 }
 
+#[derive(Debug)]
+pub enum ContractOP {
+    Deploy,
+    Call,
+    Query,
+}
+
 const LOCAL_URL: &str = "http://localhost:8545";
 const ANVIL_URL: &str = "https://prod-testnet.prod.findora.org:8545";
 const MAIN_URL: &str = "https://prod-mainnet.prod.findora.org:8545";
@@ -106,6 +113,19 @@ impl std::str::FromStr for Network {
                     Err("Please provide a node".to_owned())
                 }
             }
+            _ => Err("Invalid network".to_owned()),
+        }
+    }
+}
+
+impl std::str::FromStr for ContractOP {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_owned().as_str() {
+            "deploy" => Ok(Self::Deploy),
+            "call" => Ok(Self::Call),
+            "query" => Ok(Self::Query),
             _ => Err("Invalid network".to_owned()),
         }
     }
@@ -421,7 +441,24 @@ pub enum Commands {
         #[clap(long)]
         enable: bool,
     },
+    /// Contract Operations
+    Contract {
+        /// ethereum-compatible network
+        #[clap(long)]
+        network: Network,
 
+        /// contract operation
+        #[clap(long)]
+        optype: ContractOP,
+
+        /// contract operation
+        #[clap(long)]
+        config: PathBuf,
+
+        /// http request timeout, seconds
+        #[clap(long)]
+        timeout: Option<u64>,
+    },
     /// Test
     Test {
         /// Ethereum web3-compatible network
