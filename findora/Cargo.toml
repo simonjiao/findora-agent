@@ -16,7 +16,7 @@ env_logger = "0.9.0"
 eth_checksum = "0.1.2"
 hex = "0.4.3"
 lazy_static = "1.4.0"
-libsecp256k1 = {version = "0.5", features = ["static-context", "hmac"]}
+libsecp256k1 = {version = "0.7", features = ["static-context", "hmac"]}
 log = {version = "0.4.16", features = ["std", "serde"]}
 num_cpus = "1.13.1"
 rayon = "1.5"
