@@ -7,10 +7,17 @@ pub enum Error {
     CheckTx,
     SyncTx,
     SendErr,
+    TxInternalErr(InternalError),
     Io(std::io::Error),
     Db(redis::RedisError),
     NotSupport(String),
-    Unknown,
+    Unknown(String),
+}
+
+#[derive(Debug)]
+pub enum InternalError {
+    InvalidNonce(String),
+    Other(String),
 }
 
 impl std::fmt::Display for Error {
@@ -19,10 +26,11 @@ impl std::fmt::Display for Error {
             Error::CheckTx => write!(f, "tx check failed"),
             Error::SyncTx => write!(f, "tx not accepted by tendermint"),
             Error::SendErr => write!(f, "tx not sent"),
+            Error::TxInternalErr(e) => write!(f, "Internal Error:: {:?}", e),
             Error::Io(e) => write!(f, "Io error {:?}", e),
             Error::Db(e) => write!(f, "Database error {:?}", e),
             Error::NotSupport(e) => write!(f, "Not support: {}", e),
-            Error::Unknown => write!(f, "a unknown error happens"),
+            Error::Unknown(e) => write!(f, "a unknown error happened: {}", e),
         }
     }
 }

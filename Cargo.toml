@@ -1,7 +1,6 @@
 [workspace]
 members = [
-"findora",
-"web3"
+    "findora",
 ]
 
 [profile.release]
