@@ -287,7 +287,7 @@ impl Cli {
     where
         P: AsRef<Path> + std::fmt::Debug,
     {
-        println!("{:?} {:?} {} {}", abcid, tendermint, redis, load);
+        log::info!("{:?} {:?} {} {}", abcid, tendermint, redis, load);
 
         let proto = if &redis[..4] == "unix" { Proto::Unix } else { Proto::Url };
         let db = Rc::new(Db::new(Some(proto), None, redis, Some(6379), Some(0))?);
@@ -319,7 +319,7 @@ impl Cli {
                     }
                     _ => (0i64, 0f64),
                 };
-                println!("{},{},{},{},{:.3}", bi.height, bi.txs, bi.valid_txs, block_time, tps,);
+                log::info!("{},{},{},{},{:.3}", bi.height, bi.txs, bi.valid_txs, block_time, tps,);
             }
         }
         Ok(())
