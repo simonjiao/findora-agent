@@ -28,3 +28,4 @@ chrono = "0.4.19"
 redis = { version = "0.21.5", features =[ "default", "tokio-comp" ] }
 derive_more = "0.99.17"
 anyhow = "1.0.44"
+csv = "1.1.6"

@@ -4,6 +4,7 @@ use crate::{
     error::{Error, InternalError, Result},
     utils::extract_keypair_from_file,
 };
+use anyhow::bail;
 use bip0039::{Count, Language, Mnemonic};
 use bip32::{DerivationPath, XPrv};
 use lazy_static::lazy_static;
@@ -14,11 +15,11 @@ use secp256k1::SecretKey as SecretKey2;
 
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
-use std::time;
 use std::{
     cell::RefCell,
     error::Error as StdError,
     fs,
+    future::Future,
     ops::AddAssign,
     path::PathBuf,
     str::FromStr,
@@ -26,22 +27,20 @@ use std::{
         atomic::{AtomicU32, AtomicUsize, Ordering},
         Arc,
     },
+    time,
     time::Duration,
 };
 
-use tokio::sync::Mutex;
-use tokio::{runtime::Runtime, sync::mpsc::Receiver};
+use tokio::{runtime::Runtime, sync::mpsc::Receiver, sync::Mutex};
 use web3::{
     self,
     api::Eth,
-    contract::{Contract, Options},
-    types::H160,
-};
-use web3::{
+    contract::{tokens::Tokenizable, Contract, Options},
+    ethabi::{Int, Token, Uint},
     transports::Http,
     types::{
         Address, Block, BlockId, BlockNumber, Bytes, Transaction, TransactionId, TransactionParameters,
-        TransactionReceipt, H256, U256, U64,
+        TransactionReceipt, H160, H256, U128, U256, U64,
     },
 };
 
@@ -528,7 +527,7 @@ impl TestClient {
                     }
                 }
             }
-            println!(
+            log::info!(
                 "{}/{} {:?} {:?} {}",
                 idx,
                 total,
@@ -580,8 +579,7 @@ impl TestClient {
 
     pub fn contract_deploy(&self, deploy_json: DeployJson) -> anyhow::Result<()> {
         self.rt.block_on(async {
-            let mut task_queue = Vec::with_capacity(deploy_json.deploy_obj.len());
-
+            let mut vf = Vec::new();
             for deploy_obj in deploy_json.deploy_obj {
                 let DeployJsonObj {
                     code_path,
@@ -591,45 +589,26 @@ impl TestClient {
                     gas_price,
                     args,
                 } = deploy_obj;
-
+                let args = parse_args_csv(&args)?;
                 let eth = (*self.eth.clone()).clone();
-                let task = tokio::spawn(async move {
-                    CUR_TASKS.store(CUR_TASKS.load(Ordering::Acquire) + 1, Ordering::Release);
 
-                    let beg_time = get_timestamp();
-
+                let f = move || async move {
                     match contract_deploy(eth, &sec_key, &code_path, &abi_path, gas, gas_price, args).await {
                         Ok(v) => {
-                            let end_time = get_timestamp();
-                            update_res_queue_secs(end_time - beg_time).await;
-
-                            println!("contract address: {:?}", v);
+                            log::info!("contract address: {:?}", v);
+                            return Ok(());
                         }
                         Err(e) => {
-                            println!("deploy contract failed: {:?}", e);
+                            log::info!("deploy contract failed: {:?}", e);
+                            anyhow::bail!("deploy failed");
                         }
                     };
-                    CUR_TASKS.store(CUR_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
-                });
-                task_queue.push(task);
+                };
 
-                while MAX_TASKS.load(Ordering::Acquire) <= CUR_TASKS.load(Ordering::Acquire) {
-                    let task = task_queue.pop().unwrap();
-                    task.await?;
-                }
+                vf.push(f);
             }
 
-            let (tx1, rx1) = tokio::sync::mpsc::channel(2);
-            tokio::spawn(max_tasks_update(rx1));
-
-            for task in task_queue {
-                task.await?;
-            }
-
-            tx1.send(()).await?;
-
-            let success_task = RES_QUEUE_SECS.lock().await.0;
-            let total_times = RES_QUEUE_SECS.lock().await.1;
+            let (success_task, total_times) = multi_tasks_impl(vf).await?;
 
             log::info!(
                 "success task: {} total times: {} average time: {}",
@@ -644,13 +623,13 @@ impl TestClient {
 
             anyhow::Ok(())
         })?;
+
         Ok(())
     }
 
     pub fn contract_call(&self, call_json: CallJson) -> anyhow::Result<()> {
         self.rt.block_on(async {
-            let mut task_queue = Vec::with_capacity(call_json.call_obj.len());
-
+            let mut vf = Vec::new();
             for call_obj in call_json.call_obj {
                 let CallJsonObj {
                     contract_addr,
@@ -658,47 +637,40 @@ impl TestClient {
                     sec_key,
                     gas,
                     gas_price,
+                    func_name,
                     args,
                 } = call_obj;
-
+                let args = parse_args_csv(&args)?;
                 let eth = (*self.eth.clone()).clone();
-                let task = tokio::spawn(async move {
-                    CUR_TASKS.store(CUR_TASKS.load(Ordering::Acquire) + 1, Ordering::Release);
 
-                    let beg_time = get_timestamp();
-
-                    match contract_call(eth, &contract_addr, &sec_key, &abi_path, gas, gas_price, args).await {
+                let f = move || async move {
+                    match contract_call(
+                        eth,
+                        &sec_key,
+                        &contract_addr,
+                        &abi_path,
+                        gas,
+                        gas_price,
+                        &func_name,
+                        args,
+                    )
+                    .await
+                    {
                         Ok(v) => {
-                            let end_time = get_timestamp();
-                            update_res_queue_secs(end_time - beg_time).await;
-
-                            println!("transaction hash: {:?}", v);
+                            log::info!("transaction hash: {:?}", v);
+                            return Ok(());
                         }
                         Err(e) => {
-                            println!("call contract failed: {:?}", e);
+                            log::info!("call contract failed: {:?}", e);
+                            anyhow::bail!("call failed");
                         }
                     };
-                    CUR_TASKS.store(CUR_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
-                });
-                task_queue.push(task);
+                };
 
-                while MAX_TASKS.load(Ordering::Acquire) <= CUR_TASKS.load(Ordering::Acquire) {
-                    let task = task_queue.pop().unwrap();
-                    task.await?;
-                }
+                vf.push(f);
             }
 
-            let (tx1, rx1) = tokio::sync::mpsc::channel(2);
-            tokio::spawn(max_tasks_update(rx1));
-
-            for task in task_queue {
-                task.await?;
-            }
-
-            tx1.send(()).await?;
-
-            let success_task = RES_QUEUE_SECS.lock().await.0;
-            let total_times = RES_QUEUE_SECS.lock().await.1;
+            let (success_task, total_times) = multi_tasks_impl(vf).await?;
 
             log::info!(
                 "success task: {} total times: {} average time: {}",
@@ -713,15 +685,25 @@ impl TestClient {
 
             anyhow::Ok(())
         })?;
+
         Ok(())
     }
 
     pub fn contract_query(&self, query_json: QueryJson) -> anyhow::Result<()> {
         self.rt.block_on(async {
+            let QueryJson {
+                contract_addr,
+                abi_path,
+                func_name,
+                args,
+            } = query_json;
+            let args = parse_args_csv(&args)?;
+
             let eth = (*self.eth.clone()).clone();
-            let result = contract_query(eth, &query_json.contract_addr, &query_json.abi_path, query_json.args).await?;
+            let result = contract_query(eth, &contract_addr, &abi_path, &func_name, args).await?;
 
             log::info!("query result: {:?}", result);
+
             anyhow::Ok(())
         })?;
 
@@ -750,6 +732,7 @@ pub struct CallJsonObj {
     pub sec_key: String,
     pub gas: u32,
     pub gas_price: u32,
+    pub func_name: String,
     pub args: String,
 }
 
@@ -762,6 +745,7 @@ pub struct CallJson {
 pub struct QueryJson {
     pub contract_addr: String,
     pub abi_path: String,
+    pub func_name: String,
     pub args: String,
 }
 
@@ -786,6 +770,42 @@ pub fn parse_query_json(pat: &PathBuf) -> anyhow::Result<QueryJson> {
     return Ok(query_json_obj);
 }
 
+fn parse_args_csv(args: &str) -> anyhow::Result<Vec<Token>> {
+    let mut res: Vec<Token> = Vec::new();
+
+    let args_str = args.to_string();
+    let mut csv_reader1 = csv::Reader::from_reader(args_str.as_bytes());
+
+    for args in csv_reader1.headers() {
+        for arg in args {
+            if arg == "" {
+                bail!("arg format error!!!");
+            } else if let Ok(arg_bool) = arg.parse::<bool>() {
+                res.push(arg_bool.into_token());
+            } else if let Ok(arg_int) = arg.parse::<Int>() {
+                res.push(arg_int.into_token());
+            } else if let Ok(arg_uint) = arg.parse::<Uint>() {
+                res.push(arg_uint.into_token());
+            } else if let Ok(arg_address) = arg.parse::<Address>() {
+                res.push(arg_address.into_token());
+            } else if let Ok(arg_h160) = arg.parse::<H160>() {
+                res.push(arg_h160.into_token());
+            } else if let Ok(arg_h256) = arg.parse::<H256>() {
+                res.push(arg_h256.into_token());
+            } else if let Ok(arg_u128) = arg.parse::<U128>() {
+                res.push(arg_u128.into_token());
+            } else if let Ok(arg_u256) = arg.parse::<U256>() {
+                res.push(arg_u256.into_token());
+            } else {
+                let arg_string = arg.to_string();
+                res.push(arg_string.into_token());
+            }
+        }
+    }
+
+    return Ok(res);
+}
+
 async fn contract_deploy(
     eth: Eth<Http>,
     sec_key: &str,
@@ -793,23 +813,37 @@ async fn contract_deploy(
     abi_path: &str,
     gas: u32,
     gas_price: u32,
-    _args: String,
+    args: Vec<Token>,
 ) -> web3::contract::Result<H160> {
     let byetcode = fs::read(code_path).unwrap();
     let abi = fs::read(abi_path).unwrap();
 
     let secretkey = SecretKey2::from_str(sec_key).unwrap();
 
-    let contract = Contract::deploy(eth, &abi)?
-        .confirmations(1)
-        .poll_interval(time::Duration::from_millis(PULL_INTERVAL))
-        .options(Options::with(|opt| {
-            opt.gas = Some(gas.into());
-            opt.gas_price = Some(gas_price.into());
-            // opt.nonce = Some(nonce + nonce_add);
-        }))
-        .sign_with_key_and_execute(std::str::from_utf8(&byetcode).unwrap(), (), &secretkey, None)
-        .await?;
+    let contract;
+    if args.is_empty() {
+        contract = Contract::deploy(eth, &abi)?
+            .confirmations(1)
+            .poll_interval(time::Duration::from_millis(PULL_INTERVAL))
+            .options(Options::with(|opt| {
+                opt.gas = Some(gas.into());
+                opt.gas_price = Some(gas_price.into());
+                // opt.nonce = Some(nonce + nonce_add);
+            }))
+            .sign_with_key_and_execute(std::str::from_utf8(&byetcode).unwrap(), (), &secretkey, None)
+            .await?;
+    } else {
+        contract = Contract::deploy(eth, &abi)?
+            .confirmations(1)
+            .poll_interval(time::Duration::from_millis(PULL_INTERVAL))
+            .options(Options::with(|opt| {
+                opt.gas = Some(gas.into());
+                opt.gas_price = Some(gas_price.into());
+                // opt.nonce = Some(nonce + nonce_add);
+            }))
+            .sign_with_key_and_execute(std::str::from_utf8(&byetcode).unwrap(), args, &secretkey, None)
+            .await?;
+    }
 
     Ok(contract.address())
 }
@@ -822,7 +856,8 @@ async fn contract_call(
     abi_path: &str,
     gas: u32,
     gas_price: u32,
-    _args: String,
+    func_name: &str,
+    args: Vec<Token>,
 ) -> web3::contract::Result<H256> {
     let abi = fs::read(abi_path).unwrap();
     let contr_addr: H160 = contr_addr.parse().unwrap();
@@ -834,7 +869,12 @@ async fn contract_call(
     opt.gas = Some(gas.into());
     opt.gas_price = Some(gas_price.into());
 
-    let transaction_hash = contract.signed_call("store", (12345u32,), opt, &secretkey).await?;
+    let transaction_hash;
+    if args.is_empty() {
+        transaction_hash = contract.signed_call(func_name, (), opt, &secretkey).await?;
+    } else {
+        transaction_hash = contract.signed_call(func_name, args, opt, &secretkey).await?;
+    }
 
     Ok(transaction_hash)
 }
@@ -844,7 +884,8 @@ async fn contract_query(
     contr_addr: &str,
     // _account: &str,
     abi_path: &str,
-    _args: String,
+    func_name: &str,
+    args: Vec<Token>,
 ) -> web3::contract::Result<U256> {
     let abi = fs::read(abi_path).unwrap();
     let contr_addr: H160 = contr_addr.parse().unwrap();
@@ -854,8 +895,62 @@ async fn contract_query(
     // let _secretkey = SecretKey::from_str(_sec_key).unwrap();
     let opt = Options::default();
 
-    let result = contract.query("retrieve", (), None, opt, None).await?;
+    let result;
+    if args.is_empty() {
+        result = contract.query(func_name, (), None, opt, None).await?;
+    } else {
+        result = contract.query(func_name, args, None, opt, None).await?;
+    }
+
     Ok(result)
+}
+
+async fn multi_tasks_impl<F, T>(vf: Vec<F>) -> anyhow::Result<(u32, u128)>
+where
+    F: FnOnce() -> T,
+    T: Future<Output = anyhow::Result<()>> + Send + 'static,
+{
+    let mut task_queue = Vec::with_capacity(vf.len());
+    for f in vf {
+        let af = f();
+        let task = tokio::spawn(async move {
+            CUR_TASKS.store(CUR_TASKS.load(Ordering::Acquire) + 1, Ordering::Release);
+
+            let beg_time = get_timestamp();
+
+            match af.await {
+                Ok(_) => {
+                    let end_time = get_timestamp();
+                    update_res_queue_secs(end_time - beg_time).await;
+                }
+                Err(_) => {}
+            };
+            CUR_TASKS.store(CUR_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
+        });
+        task_queue.push(task);
+
+        while MAX_TASKS.load(Ordering::Acquire) <= CUR_TASKS.load(Ordering::Acquire) {
+            let task = task_queue.pop().unwrap();
+            task.await?;
+        }
+    }
+
+    let (tx1, rx1) = tokio::sync::mpsc::channel(2);
+    tokio::spawn(max_tasks_update(rx1));
+
+    for task in task_queue {
+        task.await?;
+    }
+
+    tx1.send(()).await?;
+
+    // error occur
+    // return anyhow::Ok((RES_QUEUE_SECS.lock().await.0, RES_QUEUE_SECS.lock().await.1));
+
+    let success_task = RES_QUEUE_SECS.lock().await.0;
+    let total_times = RES_QUEUE_SECS.lock().await.1;
+
+    return anyhow::Ok((success_task, total_times));
 }
 
 async fn max_tasks_update(mut rx: Receiver<()>) {
