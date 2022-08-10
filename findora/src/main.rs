@@ -26,7 +26,7 @@ fn eth_transaction(network: &str, timeout: Option<u64>, hash: H256) {
     // use first endpoint to fund accounts
     let client = TestClient::setup(network[0].clone(), timeout);
     let tx = client.transaction(TransactionId::from(hash));
-    println!("{:?}", tx);
+    log::info!("{:?}", tx);
 }
 
 fn eth_account(network: &str, timeout: Option<u64>, account: Address) {
@@ -35,7 +35,7 @@ fn eth_account(network: &str, timeout: Option<u64>, account: Address) {
     let client = TestClient::setup(network[0].clone(), timeout);
     let balance = client.balance(account, None);
     let nonce = client.nonce(account, None);
-    println!("{:?}: {} {:?}", account, balance, nonce);
+    log::info!("{:?}: {} {:?}", account, balance, nonce);
 }
 fn eth_contract(network: &str, timeout: Option<u64>, optype: &ContractOP, config: &PathBuf) -> anyhow::Result<()> {
     let network = real_network(network);
@@ -154,7 +154,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: Op
         //        } else {
         //            "None".to_string()
         //        };
-        //        println!("{}", msg);
+        //        log::info!("{}", msg);
         //    });
     } else if let Some(b) = client.current_block() {
         let block_time = match b.number {
@@ -167,7 +167,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: Op
             }
             _ => None,
         };
-        println!(
+        log::info!(
             "{},{:?},{},{}",
             b.number.unwrap_or_default(),
             b.timestamp,
@@ -242,7 +242,7 @@ fn fund_accounts(
                 Some((from, amount))
             };
             if let Some(a) = account.as_ref() {
-                println!("{}/{} {:?}", idx + 1, total, a);
+                log::info!("{}/{} {:?}", idx + 1, total, a);
             }
             account
         })
