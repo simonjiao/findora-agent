@@ -330,7 +330,7 @@ fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Test {
             network,
-            mode: _,
+            mode,
             delay,
             max_threads,
             count,
@@ -340,6 +340,10 @@ fn main() -> anyhow::Result<()> {
             need_retry,
             check_balance,
         }) => {
+            if mode == &TestMode::Progressive {
+                progressive_test(network, block_time, timeout, source);
+                return Ok(());
+            }
             let max_par = *max_threads;
             let source_file = source;
             let _block_time = Some(*block_time);

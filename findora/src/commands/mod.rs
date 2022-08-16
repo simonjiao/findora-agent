@@ -1,3 +1,5 @@
+mod progressive_test;
+
 use crate::{
     db::{Db, Proto},
     profiler,
@@ -14,10 +16,13 @@ use std::{
 };
 use web3::types::{Address, H256};
 
-#[derive(Debug)]
+pub use progressive_test::*;
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum TestMode {
     Basic,
     Contract,
+    Progressive,
 }
 
 impl std::str::FromStr for TestMode {
@@ -27,6 +32,7 @@ impl std::str::FromStr for TestMode {
         match s.to_lowercase().as_str() {
             "basic" => Ok(Self::Basic),
             "contract" => Ok(Self::Contract),
+            "progressive" => Ok(Self::Progressive),
             _ => Err("Invalid mode: basic and contract are supported".to_owned()),
         }
     }
