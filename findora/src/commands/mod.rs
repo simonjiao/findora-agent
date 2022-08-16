@@ -91,7 +91,7 @@ impl std::str::FromStr for Network {
                 if segs.len() < 2 {
                     return Err("Please provide a cluster num at least".to_owned());
                 }
-                if segs.get(0) != Some(&"qa") {
+                if segs.first() != Some(&"qa") {
                     return Err("Just for qa environment".to_owned());
                 }
                 return if let Some(cluster) = segs.get(1).and_then(|&num| num.parse::<u32>().ok()) {

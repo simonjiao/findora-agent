@@ -753,21 +753,21 @@ pub fn parse_deploy_json(pat: &PathBuf) -> anyhow::Result<DeployJson> {
     let deploy_json_bytes = fs::read(pat)?;
     let deply_json_obj: DeployJson = serde_json::from_slice(deploy_json_bytes.as_slice())?;
 
-    return Ok(deply_json_obj);
+    Ok(deply_json_obj)
 }
 
 pub fn parse_call_json(pat: &PathBuf) -> anyhow::Result<CallJson> {
     let call_json_bytes = fs::read(pat)?;
     let call_json_obj: CallJson = serde_json::from_slice(call_json_bytes.as_slice())?;
 
-    return Ok(call_json_obj);
+    Ok(call_json_obj)
 }
 
 pub fn parse_query_json(pat: &PathBuf) -> anyhow::Result<QueryJson> {
     let query_json_bytes = fs::read(pat)?;
     let query_json_obj: QueryJson = serde_json::from_slice(query_json_bytes.as_slice())?;
 
-    return Ok(query_json_obj);
+    Ok(query_json_obj)
 }
 
 fn parse_args_csv(args: &str) -> anyhow::Result<Vec<Token>> {
@@ -865,9 +865,11 @@ async fn contract_call(
     let contract = Contract::from_json(eth, contr_addr, &abi)?;
     let secretkey = SecretKey2::from_str(sec_key).unwrap();
 
-    let mut opt = Options::default();
-    opt.gas = Some(gas.into());
-    opt.gas_price = Some(gas_price.into());
+    let opt = Options {
+        gas: Some(gas.into()),
+        gas_price: Some(gas_price.into()),
+        ..Default::default()
+    };
 
     let transaction_hash;
     if args.is_empty() {
@@ -971,17 +973,21 @@ async fn max_tasks_update(mut rx: Receiver<()>) {
                 }
             }
 
-            if big > less {
-                MAX_TASKS.store(2 * MAX_TASKS.load(Ordering::Acquire), Ordering::Release);
-            } else if big < less {
-                MAX_TASKS.store(MAX_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
-            } else {
-                let end_cost_time2 = average_time_queue.iter().rev().skip(1).rev().last().unwrap();
-
-                if end_cost_time > end_cost_time2 && end_cost_time - end_cost_time2 > DELTA_RANGE {
+            match big.cmp(&less) {
+                std::cmp::Ordering::Greater => {
                     MAX_TASKS.store(2 * MAX_TASKS.load(Ordering::Acquire), Ordering::Release);
-                } else if end_cost_time < end_cost_time2 && end_cost_time2 - end_cost_time > DELTA_RANGE {
+                }
+                std::cmp::Ordering::Less => {
                     MAX_TASKS.store(MAX_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
+                }
+                std::cmp::Ordering::Equal => {
+                    let end_cost_time2 = average_time_queue.iter().rev().skip(1).rev().last().unwrap();
+
+                    if end_cost_time > end_cost_time2 && end_cost_time - end_cost_time2 > DELTA_RANGE {
+                        MAX_TASKS.store(2 * MAX_TASKS.load(Ordering::Acquire), Ordering::Release);
+                    } else if end_cost_time < end_cost_time2 && end_cost_time2 - end_cost_time > DELTA_RANGE {
+                        MAX_TASKS.store(MAX_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
+                    }
                 }
             }
         }
