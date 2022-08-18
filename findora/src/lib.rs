@@ -593,16 +593,21 @@ impl TestClient {
                 let eth = (*self.eth.clone()).clone();
 
                 let f = move || async move {
-                    match contract_deploy(eth, &sec_key, &code_path, &abi_path, gas, gas_price, args).await {
-                        Ok(v) => {
-                            log::info!("contract address: {:?}", v);
-                            return Ok(());
-                        }
-                        Err(e) => {
-                            log::info!("deploy contract failed: {:?}", e);
-                            anyhow::bail!("deploy failed");
-                        }
-                    };
+                    let succeed =
+                        match contract_deploy(eth, &sec_key, &code_path, &abi_path, gas, gas_price, args).await {
+                            Ok(v) => {
+                                info!("contract address: {:?}", v);
+                                true
+                            }
+                            Err(e) => {
+                                error!("deploy contract failed: {:?}", e);
+                                false
+                            }
+                        };
+                    if !succeed {
+                        bail!("deploy failed");
+                    }
+                    Ok(())
                 };
 
                 vf.push(f);
@@ -644,7 +649,7 @@ impl TestClient {
                 let eth = (*self.eth.clone()).clone();
 
                 let f = move || async move {
-                    match contract_call(
+                    let succeed = match contract_call(
                         eth,
                         &sec_key,
                         &contract_addr,
@@ -658,13 +663,17 @@ impl TestClient {
                     {
                         Ok(v) => {
                             log::info!("transaction hash: {:?}", v);
-                            return Ok(());
+                            true
                         }
                         Err(e) => {
                             log::info!("call contract failed: {:?}", e);
-                            anyhow::bail!("call failed");
+                            false
                         }
                     };
+                    if !succeed {
+                        bail!("call failed");
+                    }
+                    Ok(())
                 };
 
                 vf.push(f);
@@ -753,21 +762,21 @@ pub fn parse_deploy_json(pat: &PathBuf) -> anyhow::Result<DeployJson> {
     let deploy_json_bytes = fs::read(pat)?;
     let deply_json_obj: DeployJson = serde_json::from_slice(deploy_json_bytes.as_slice())?;
 
-    return Ok(deply_json_obj);
+    Ok(deply_json_obj)
 }
 
 pub fn parse_call_json(pat: &PathBuf) -> anyhow::Result<CallJson> {
     let call_json_bytes = fs::read(pat)?;
     let call_json_obj: CallJson = serde_json::from_slice(call_json_bytes.as_slice())?;
 
-    return Ok(call_json_obj);
+    Ok(call_json_obj)
 }
 
 pub fn parse_query_json(pat: &PathBuf) -> anyhow::Result<QueryJson> {
     let query_json_bytes = fs::read(pat)?;
     let query_json_obj: QueryJson = serde_json::from_slice(query_json_bytes.as_slice())?;
 
-    return Ok(query_json_obj);
+    Ok(query_json_obj)
 }
 
 fn parse_args_csv(args: &str) -> anyhow::Result<Vec<Token>> {
@@ -776,9 +785,9 @@ fn parse_args_csv(args: &str) -> anyhow::Result<Vec<Token>> {
     let args_str = args.to_string();
     let mut csv_reader1 = csv::Reader::from_reader(args_str.as_bytes());
 
-    for args in csv_reader1.headers() {
+    if let Ok(args) = csv_reader1.headers() {
         for arg in args {
-            if arg == "" {
+            if arg.is_empty() {
                 bail!("arg format error!!!");
             } else if let Ok(arg_bool) = arg.parse::<bool>() {
                 res.push(arg_bool.into_token());
@@ -803,7 +812,7 @@ fn parse_args_csv(args: &str) -> anyhow::Result<Vec<Token>> {
         }
     }
 
-    return Ok(res);
+    Ok(res)
 }
 
 async fn contract_deploy(
@@ -820,9 +829,8 @@ async fn contract_deploy(
 
     let secretkey = SecretKey2::from_str(sec_key).unwrap();
 
-    let contract;
-    if args.is_empty() {
-        contract = Contract::deploy(eth, &abi)?
+    let contract = if args.is_empty() {
+        Contract::deploy(eth, &abi)?
             .confirmations(1)
             .poll_interval(time::Duration::from_millis(PULL_INTERVAL))
             .options(Options::with(|opt| {
@@ -831,9 +839,9 @@ async fn contract_deploy(
                 // opt.nonce = Some(nonce + nonce_add);
             }))
             .sign_with_key_and_execute(std::str::from_utf8(&byetcode).unwrap(), (), &secretkey, None)
-            .await?;
+            .await?
     } else {
-        contract = Contract::deploy(eth, &abi)?
+        Contract::deploy(eth, &abi)?
             .confirmations(1)
             .poll_interval(time::Duration::from_millis(PULL_INTERVAL))
             .options(Options::with(|opt| {
@@ -842,12 +850,13 @@ async fn contract_deploy(
                 // opt.nonce = Some(nonce + nonce_add);
             }))
             .sign_with_key_and_execute(std::str::from_utf8(&byetcode).unwrap(), args, &secretkey, None)
-            .await?;
-    }
+            .await?
+    };
 
     Ok(contract.address())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn contract_call(
     eth: Eth<Http>,
     contr_addr: &str,
@@ -865,16 +874,17 @@ async fn contract_call(
     let contract = Contract::from_json(eth, contr_addr, &abi)?;
     let secretkey = SecretKey2::from_str(sec_key).unwrap();
 
-    let mut opt = Options::default();
-    opt.gas = Some(gas.into());
-    opt.gas_price = Some(gas_price.into());
+    let opt = Options {
+        gas: Some(gas.into()),
+        gas_price: Some(gas_price.into()),
+        ..Default::default()
+    };
 
-    let transaction_hash;
-    if args.is_empty() {
-        transaction_hash = contract.signed_call(func_name, (), opt, &secretkey).await?;
+    let transaction_hash = if args.is_empty() {
+        contract.signed_call(func_name, (), opt, &secretkey).await?
     } else {
-        transaction_hash = contract.signed_call(func_name, args, opt, &secretkey).await?;
-    }
+        contract.signed_call(func_name, args, opt, &secretkey).await?
+    };
 
     Ok(transaction_hash)
 }
@@ -895,12 +905,11 @@ async fn contract_query(
     // let _secretkey = SecretKey::from_str(_sec_key).unwrap();
     let opt = Options::default();
 
-    let result;
-    if args.is_empty() {
-        result = contract.query(func_name, (), None, opt, None).await?;
+    let result = if args.is_empty() {
+        contract.query(func_name, (), None, opt, None).await?
     } else {
-        result = contract.query(func_name, args, None, opt, None).await?;
-    }
+        contract.query(func_name, args, None, opt, None).await?
+    };
 
     Ok(result)
 }
@@ -918,13 +927,10 @@ where
 
             let beg_time = get_timestamp();
 
-            match af.await {
-                Ok(_) => {
-                    let end_time = get_timestamp();
-                    update_res_queue_secs(end_time - beg_time).await;
-                }
-                Err(_) => {}
-            };
+            if af.await.is_ok() {
+                let end_time = get_timestamp();
+                update_res_queue_secs(end_time - beg_time).await;
+            }
             CUR_TASKS.store(CUR_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
         });
         task_queue.push(task);
@@ -950,7 +956,7 @@ where
     let success_task = RES_QUEUE_SECS.lock().await.0;
     let total_times = RES_QUEUE_SECS.lock().await.1;
 
-    return anyhow::Ok((success_task, total_times));
+    anyhow::Ok((success_task, total_times))
 }
 
 async fn max_tasks_update(mut rx: Receiver<()>) {
@@ -971,17 +977,21 @@ async fn max_tasks_update(mut rx: Receiver<()>) {
                 }
             }
 
-            if big > less {
-                MAX_TASKS.store(2 * MAX_TASKS.load(Ordering::Acquire), Ordering::Release);
-            } else if big < less {
-                MAX_TASKS.store(MAX_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
-            } else {
-                let end_cost_time2 = average_time_queue.iter().rev().skip(1).rev().last().unwrap();
-
-                if end_cost_time > end_cost_time2 && end_cost_time - end_cost_time2 > DELTA_RANGE {
+            match big.cmp(&less) {
+                std::cmp::Ordering::Greater => {
                     MAX_TASKS.store(2 * MAX_TASKS.load(Ordering::Acquire), Ordering::Release);
-                } else if end_cost_time < end_cost_time2 && end_cost_time2 - end_cost_time > DELTA_RANGE {
+                }
+                std::cmp::Ordering::Less => {
                     MAX_TASKS.store(MAX_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
+                }
+                std::cmp::Ordering::Equal => {
+                    let end_cost_time2 = average_time_queue.iter().rev().skip(1).rev().last().unwrap();
+
+                    if end_cost_time > end_cost_time2 && end_cost_time - end_cost_time2 > DELTA_RANGE {
+                        MAX_TASKS.store(2 * MAX_TASKS.load(Ordering::Acquire), Ordering::Release);
+                    } else if end_cost_time < end_cost_time2 && end_cost_time2 - end_cost_time > DELTA_RANGE {
+                        MAX_TASKS.store(MAX_TASKS.load(Ordering::Acquire) - 1, Ordering::Release);
+                    }
                 }
             }
         }
