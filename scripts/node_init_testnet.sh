@@ -37,19 +37,6 @@ EVM_CHAIN_ID=$4
 # root directory
 ROOT_DIR=$5
 
-case "${RUNNER}" in
-"native")
-  echo "using native binary"
-  ;;
-"img")
-  echo "using docker image"
-  ;;
-*)
-  echo "invalid runner"
-  exit 1
-  ;;
-esac
-
 if [ -n "$VER" ]; then
   NODE_IMG="$IMG_PREFIX:$VER"
 elif VER=$(curl -s $SERV_URL:8668/version); then
@@ -63,6 +50,19 @@ else
   echo "Failed to obtain image version"
   exit 1
 fi
+
+case "${RUNNER}" in
+"native")
+  echo "using native binary"
+  ;;
+"img")
+  echo "using docker image $NODE_IMG"
+  ;;
+*)
+  echo "invalid runner"
+  exit 1
+  ;;
+esac
 
 [ -n "$ROOT_DIR" ] || ROOT_DIR=/data/findora/$NAMESPACE
 
@@ -81,7 +81,6 @@ else
   exit 2
 fi
 
-echo "using image $NODE_IMG"
 echo "root directory $ROOT_DIR"
 echo "chain id $EVM_CHAIN_ID"
 
