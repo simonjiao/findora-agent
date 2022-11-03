@@ -91,6 +91,7 @@ if ((START_MODE != 2)); then
   # clean old data and config files
   sudo rm -rf ${ROOT_DIR}/findorad || exit 1
   sudo rm -rf ${ROOT_DIR}/tendermint || exit 1
+  cp "${ROOT_DIR}/checkpoint.toml" "${ROOT_DIR}/findorad/" || exit 1
 
   sudo docker run --rm -v ${ROOT_DIR}/tendermint:/root/.tendermint "${NODE_IMG}" init --${NAMESPACE} || exit 1
   sudo chown -R "$(id -u)":"$(id -g)" ${ROOT_DIR}/tendermint/
@@ -129,6 +130,7 @@ elif ((START_MODE == 0)); then
   mv "${ROOT_DIR}/snapshot_data/data/tendermint/mainnet/node0/data" "${ROOT_DIR}/tendermint/data"
 
   rm -rf ${ROOT_DIR}/snapshot_data
+  cp "${ROOT_DIR}/checkpoint.toml" "${ROOT_DIR}/findorad/" || exit 1
 fi
 
 ###################
@@ -150,6 +152,7 @@ if [ "${RUNNER}" == "img" ]; then
     --name findorad \
     "$NODE_IMG" node \
     --ledger-dir /tmp/findora \
+    --checkpoint-file /tmp/findora/checkpoint.toml \
     --tendermint-host 0.0.0.0 \
     --tendermint-node-key-config-path="/root/.tendermint/config/priv_validator_key.json" \
     --enable-query-service \
