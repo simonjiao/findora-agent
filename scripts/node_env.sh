@@ -1,15 +1,8 @@
-#!/usr/bin/env bash
-
-ENV=prod
-NAMESPACE=mainnet
-SERV_URL=https://${ENV}-${NAMESPACE}.${ENV}.findora.org
-IMG_PREFIX='public.ecr.aws/k6m5b6e2/release/findorad'
-
-mainnet_image() {
+net_image() {
     VER=$1
     if [ -n "$VER" ]; then
         NODE_IMG="$IMG_PREFIX:$VER"
-    elif VER=$(curl -s $SERV_URL:8668/version); then
+    elif VER=$(curl -s "$SERV_URL":8668/version); then
         if VER=$(echo "$VER" | awk '{print $2}'); then
             NODE_IMG="$IMG_PREFIX:$VER"
         else
@@ -42,7 +35,9 @@ init_tendermint_config() {
     ROOT_DIR=$1
     NODE_IMG=$2
     # backup old data and config files
-    sudo mv "${ROOT_DIR}"/tendermint/config "${ROOT_DIR}"/tendermint/config.bak || exit 1
+    if [ -d "${ROOT_DIR}"/tendermint/config ]; then
+        sudo mv "${ROOT_DIR}"/tendermint/config "${ROOT_DIR}"/tendermint/config.bak || exit 1
+    fi
 
     sudo docker run --rm -v "${ROOT_DIR}"/tendermint:/root/.tendermint "${NODE_IMG}" init --${NAMESPACE} || exit 1
     sudo chown -R "$(id -u)":"$(id -g)" "${ROOT_DIR}"/tendermint/
