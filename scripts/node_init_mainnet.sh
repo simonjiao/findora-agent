@@ -7,10 +7,51 @@ IMG_PREFIX='public.ecr.aws/k6m5b6e2/release/findorad'
 
 . ./node_env.sh
 
-START_MODE=$1
-RUNNER=$2
+MODE=unset
+RUNNER=unset
+IMG=""
+DIR=/data/findora/${NAMESPACE}
+CHAIN=""
+TRACE=90
 
-case "${START_MODE}" in
+usage()
+{
+  echo "Usage: node [ -m | --mode ]
+                    [ -r | --runner ]
+                    [ -i | --img IMG ]
+                    [ -d | --dir DIR ]"
+  exit 2
+}
+
+PARSED_ARGUMENTS=$(getopt -a -n alphabet -o hm:r:i:d:c:t: --long help,mode:,runner:,img:,dir:,chain:,trace: -- "$@")
+VALID_ARGUMENTS=$?
+if [ "$VALID_ARGUMENTS" != "0" ]; then
+  usage
+fi
+
+echo "PARSED_ARGUMENTS is $PARSED_ARGUMENTS"
+eval set -- "$PARSED_ARGUMENTS"
+while :
+do
+  case "$1" in
+    -h | --help)    usage       ; shift   ;;
+    -m | --mode)    MODE="$2"   ; shift 2 ;;
+    -r | --runner)  RUNNER="$2" ; shift 2 ;;
+    -i | --img)     IMG="$2"    ; shift 2 ;;
+    -d | --dir)     DIR="$2"    ; shift 2 ;;
+    -c | --chain)   CHAIN="$2"    ; shift 2 ;;
+    -t | --trace)   TRACE="$2"    ; shift 2 ;;
+    # -- means the end of the arguments; drop this, and break out of the while loop
+    --) shift; break ;;
+    # If invalid options were passed, then getopt should have reported an error,
+    # which we checked as VALID_ARGUMENTS when getopt was called...
+    *) echo "Unexpected option: $1 - this should not happen."
+       usage ;;
+  esac
+done
+
+
+case "${MODE}" in
 "initConfig")
   echo "initial tendermint config..."
   ;;
@@ -28,7 +69,7 @@ case "${RUNNER}" in
   echo "using native binary"
   ;;
 "img")
-  if ! NODE_IMG=$(net_image); then
+  if ! NODE_IMG=$(net_image "${IMG}"); then
       exit 2
   fi
   echo "using docker image $NODE_IMG"
@@ -39,10 +80,17 @@ case "${RUNNER}" in
   ;;
 esac
 
-[ -n "$ROOT_DIR" ] || ROOT_DIR=/data/findora/"$NAMESPACE"
-
-if [ "${START_MODE}" = "initConfig" ]; then
-    init_tendermint_config "${ROOT_DIR}" "${NODE_IMG}"
+if [ "${MODE}" = "initConfig" ]; then
+    init_tendermint_config "${DIR}" "${NODE_IMG}"
+elif [ "${MODE}" = "restart" ]; then
+    [ -n "${CHAIN}" ] || CHAIN=$(get_chain_id)
+    if [ "${RUNNER}" = "native" ]; then
+        native_run "${DIR}" "${CHAIN}" "${TRACE}"
+    else
+        :
+    fi
 fi
+
+sleep 15; node_info
 
 echo; echo; echo "done"; echo
