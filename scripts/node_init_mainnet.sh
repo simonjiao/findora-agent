@@ -13,6 +13,7 @@ IMG=""
 DIR=/data/findora/${NAMESPACE}
 CHAIN=""
 TRACE=90
+FRESH=false
 
 usage()
 {
@@ -23,7 +24,7 @@ usage()
   exit 2
 }
 
-PARSED_ARGUMENTS=$(getopt -a -n alphabet -o hm:r:i:d:c:t: --long help,mode:,runner:,img:,dir:,chain:,trace: -- "$@")
+PARSED_ARGUMENTS=$(getopt -a -n alphabet -o hfm:r:i:d:c:t: --long help,fresh,mode:,runner:,img:,dir:,chain:,trace: -- "$@")
 VALID_ARGUMENTS=$?
 if [ "$VALID_ARGUMENTS" != "0" ]; then
   usage
@@ -35,6 +36,7 @@ while :
 do
   case "$1" in
     -h | --help)    usage       ; shift   ;;
+    -f | --fresh)   FRESH=true  ; shift   ;;
     -m | --mode)    MODE="$2"   ; shift 2 ;;
     -r | --runner)  RUNNER="$2" ; shift 2 ;;
     -i | --img)     IMG="$2"    ; shift 2 ;;
@@ -85,7 +87,7 @@ if [ "${MODE}" = "initConfig" ]; then
 elif [ "${MODE}" = "restart" ]; then
     [ -n "${CHAIN}" ] || CHAIN=$(get_chain_id)
     if [ "${RUNNER}" = "native" ]; then
-        native_run "${DIR}" "${CHAIN}" "${TRACE}"
+        native_run "${DIR}" "${CHAIN}" "${TRACE}" "${FRESH}"
     else
         :
     fi
