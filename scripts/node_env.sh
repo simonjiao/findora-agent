@@ -96,15 +96,14 @@ native_run() {
     TRACE=$3
     FRESH=$4
 
-    TRACE_OPTIONS="${TRACE}"
-    if [ "${FRESH}" ]; then
-        TRACE_OPTIONS="$TRACE_OPTIONS --fresh"
+    if ${FRESH}; then
+        FRESH="--fresh"
     fi
 
     EVM_CHAIN_ID="$EVM_CHAIN_ID" \
         RUST_LOG="abciapp=info,baseapp=debug,account=debug,ethereum=debug,evm=debug,eth_rpc=debug" \
         abcid --submission-service-port 8669 \
-        --trace TRACE_OPTIONS \
+        --trace "${TRACE}" "${FRESH}" \
         --ledger-service-port 8668 \
         --ledger-dir "${ROOT_DIR}"/findorad \
         --enable-eth-api-service \
