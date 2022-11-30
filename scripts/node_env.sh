@@ -93,17 +93,17 @@ docker_run(){
 native_run() {
     ROOT_DIR=$1
     EVM_CHAIN_ID=$2
-    TRACE=$3
+    ARC_TRACE=$3
     FRESH=$4
 
     if ${FRESH}; then
-        FRESH="--fresh"
+        ARC_FRESH="--arc-fresh"
     fi
 
     EVM_CHAIN_ID="$EVM_CHAIN_ID" \
         RUST_LOG="abciapp=info,baseapp=debug,account=debug,ethereum=debug,evm=debug,eth_rpc=debug" \
         abcid --submission-service-port 8669 \
-        --trace "${TRACE}" "${FRESH}" \
+        --arc-history "${ARC_TRACE}" "${ARC_FRESH}" \
         --ledger-service-port 8668 \
         --ledger-dir "${ROOT_DIR}"/findorad \
         --enable-eth-api-service \
