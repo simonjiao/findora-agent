@@ -1,7 +1,7 @@
 net_image() {
     VER=$1
     if [ -n "$VER" ]; then
-        NODE_IMG="$IMG_PREFIX:$VER"
+        NODE_IMG="$IMG_DEV_PREFIX:$VER"
     elif VER=$(curl -s "$SERV_URL":8668/version); then
         if VER=$(echo "$VER" | awk '{print $2}'); then
             NODE_IMG="$IMG_PREFIX:$VER"
@@ -68,9 +68,17 @@ prepare_snapshot_data() {
 }
 
 docker_run(){
-   ROOT_DIR=$1
-   NODE_IMG=$2
-   sudo docker rm -f findorad || exit 1
+    NODE_IMG=$1
+    ROOT_DIR=$2
+    EVM_CHAIN_ID=$3
+    ARC_TRACE=$4
+    FRESH=$5
+
+    if ${FRESH}; then
+        ARC_FRESH="--arc-fresh"
+    fi
+
+    sudo docker rm -f findorad || exit 1
     sudo docker run -d \
         -v "${ROOT_DIR}"/tendermint:/root/.tendermint \
         -v "${ROOT_DIR}"/findorad:/tmp/findora \
@@ -80,11 +88,11 @@ docker_run(){
         -p 26657:26657 \
         -p 8545:8545 \
         -e EVM_CHAIN_ID="$EVM_CHAIN_ID" \
-        -e RUST_LOG="abciapp=info,baseapp=debug,account=info,ethereum=debug,evm=debug,eth_rpc=debug" \
+        -e RUST_LOG="abciapp=info,baseapp=debug,account=info,ethereum=info,evm=info,eth_rpc=info" \
         --name findorad \
         "$NODE_IMG" node \
         --ledger-dir /tmp/findora \
-        --checkpoint-file /tmp/findora/checkpoint.toml \
+        --arc-history "${ARC_TRACE}" "${ARC_FRESH}" \
         --tendermint-host 0.0.0.0 \
         --tendermint-node-key-config-path="/root/.tendermint/config/priv_validator_key.json" \
         --enable-eth-api-service

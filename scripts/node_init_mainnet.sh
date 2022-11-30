@@ -4,6 +4,7 @@ ENV=prod
 NAMESPACE=mainnet
 SERV_URL=https://${ENV}-${NAMESPACE}.${ENV}.findora.org
 IMG_PREFIX='public.ecr.aws/k6m5b6e2/release/findorad'
+IMG_DEV_PREFIX='public.ecr.aws/k6m5b6e2/dev/findorad'
 
 . ./node_env.sh
 
@@ -89,7 +90,7 @@ elif [ "${MODE}" = "restart" ]; then
     if [ "${RUNNER}" = "native" ]; then
         native_run "${DIR}" "${CHAIN}" "${TRACE}" "${FRESH}"
     else
-        :
+        docker_run "${NODE_IMG}" "${DIR}" "${CHAIN}" "${TRACE}" "${FRESH}"
     fi
 fi
 
