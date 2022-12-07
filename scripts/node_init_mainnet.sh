@@ -90,6 +90,7 @@ elif [ "${MODE}" = "restart" ]; then
     if [ "${RUNNER}" = "native" ]; then
         native_run "${DIR}" "${CHAIN}" "${TRACE}" "${FRESH}"
     else
+	export ARC_HISTORY="${TRACE}"
         docker_run "${NODE_IMG}" "${DIR}" "${CHAIN}" "${TRACE}" "${FRESH}"
     fi
 fi

@@ -260,7 +260,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let cli = Cli::parse_args();
-    debug!("{:?}", cli);
+    info!("{:?}", cli);
     info!("logical cpus {}, physical cpus {}", log_cpus(), phy_cpus());
 
     match &cli.command {
@@ -370,7 +370,7 @@ fn main() -> anyhow::Result<()> {
             info!("block_number: {}", client.block_number().unwrap());
             info!("frc20 code:   {:?}", client.frc20_code().unwrap());
 
-            info!("preparing test data...");
+            info!("preparing test data, it could take several minutes...");
             let source_keys = source_keys
                 .par_iter()
                 .filter_map(|kp| {

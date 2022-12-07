@@ -441,6 +441,7 @@ pub enum Commands {
         #[clap(long)]
         enable: bool,
     },
+
     /// Contract Operations
     Contract {
         /// ethereum-compatible network

@@ -71,8 +71,7 @@ docker_run(){
     NODE_IMG=$1
     ROOT_DIR=$2
     EVM_CHAIN_ID=$3
-    ARC_TRACE=$4
-    FRESH=$5
+    FRESH=$4
 
     if ${FRESH}; then
         ARC_FRESH="--arc-fresh"
@@ -92,7 +91,7 @@ docker_run(){
         --name findorad \
         "$NODE_IMG" node \
         --ledger-dir /tmp/findora \
-        --arc-history "${ARC_TRACE}" "${ARC_FRESH}" \
+        "${ARC_FRESH}" \
         --tendermint-host 0.0.0.0 \
         --tendermint-node-key-config-path="/root/.tendermint/config/priv_validator_key.json" \
         --enable-eth-api-service
