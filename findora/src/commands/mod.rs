@@ -1,3 +1,7 @@
+mod long_run;
+
+pub use long_run::*;
+
 use crate::{
     db::{Db, Proto},
     profiler,
@@ -14,10 +18,11 @@ use std::{
 };
 use web3::types::{Address, H256};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TestMode {
     Basic,
     Contract,
+    Long,
 }
 
 impl std::str::FromStr for TestMode {

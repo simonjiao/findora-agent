@@ -16,7 +16,7 @@ use std::{
 };
 
 use commands::*;
-use feth::{one_eth_key, parse_call_json, parse_deploy_json, parse_query_json, utils::*, KeyPair, TestClient};
+use feth::{one_eth_key, parse_call_json, parse_deploy_json, parse_query_json, utils::*, TestClient};
 use log::{debug, error, info};
 use rayon::prelude::*;
 use web3::types::{Address, Block, BlockId, BlockNumber, TransactionId, H256, U256, U64};
@@ -330,7 +330,7 @@ fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Test {
             network,
-            mode: _,
+            mode,
             delay,
             max_threads,
             count,
@@ -340,6 +340,9 @@ fn main() -> anyhow::Result<()> {
             need_retry,
             check_balance,
         }) => {
+            if mode != &TestMode::Long {
+                return Ok(());
+            }
             let max_par = *max_threads;
             let source_file = source;
             let _block_time = Some(*block_time);
@@ -347,11 +350,17 @@ fn main() -> anyhow::Result<()> {
             let count = *count;
             let _need_retry = *need_retry;
 
-            let source_keys: Vec<KeyPair> =
-                serde_json::from_str(std::fs::read_to_string(source_file).unwrap().as_str()).unwrap();
             let target_amount = web3::types::U256::exp10(16); // 0.01 eth
 
             check_parallel_args(max_par);
+
+            let url = network.get_url();
+            let client = Arc::new(TestClient::setup(Some(url), timeout));
+
+            let (chain_id, gas_price) = display_info(client.clone());
+
+            info!("preparing test data, it could take several minutes...");
+            let source_keys = build_source_keys(client.clone(), source_file, *check_balance, target_amount, count);
 
             let max_pool_size = calc_pool_size(source_keys.len(), max_par as usize);
             rayon::ThreadPoolBuilder::new()
@@ -359,46 +368,6 @@ fn main() -> anyhow::Result<()> {
                 .build_global()
                 .unwrap();
             info!("thread pool size {}", max_pool_size);
-
-            let url = network.get_url();
-            let client = Arc::new(TestClient::setup(Some(url), timeout));
-
-            let chain_id = client.chain_id().unwrap().as_u64();
-            let gas_price = client.gas_price().unwrap();
-            info!("chain_id:     {}", chain_id);
-            info!("gas_price:    {}", gas_price);
-            info!("block_number: {}", client.block_number().unwrap());
-            info!("frc20 code:   {:?}", client.frc20_code().unwrap());
-
-            info!("preparing test data, it could take several minutes...");
-            let source_keys = source_keys
-                .par_iter()
-                .filter_map(|kp| {
-                    let (secret, address) = (
-                        secp256k1::SecretKey::from_str(kp.private.as_str()).unwrap(),
-                        Address::from_str(kp.address.as_str()).unwrap(),
-                    );
-                    let balance = if *check_balance {
-                        client.balance(address, None)
-                    } else {
-                        U256::MAX
-                    };
-                    if balance > target_amount.mul(count) {
-                        let target = (0..count)
-                            .map(|_| {
-                                (
-                                    Address::from_str(one_eth_key().address.as_str()).unwrap(),
-                                    target_amount,
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        debug!("account {:?} added to source pool", address);
-                        Some((secret, address, target))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
 
             if count == 0 || source_keys.is_empty() {
                 error!("Not enough sufficient source accounts or target accounts, skipped.");
@@ -425,7 +394,7 @@ fn main() -> anyhow::Result<()> {
                         last_height = current;
                         break;
                     } else {
-                        std::thread::sleep(Duration::from_secs(1));
+                        std::thread::sleep(Duration::from_millis(300));
                     }
                 }
                 let now = std::time::Instant::now();

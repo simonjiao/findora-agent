@@ -1,7 +1,10 @@
+use crate::{one_eth_key, KeyPair, TestClient};
+use log::{debug, info};
+use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
-use std::{path::Path, str::FromStr};
+use std::{ops::Mul, path::Path, str::FromStr, sync::Arc};
 use url::Url;
-use web3::types::{Address, H256};
+use web3::types::{Address, H256, U256};
 
 pub fn log_cpus() -> u64 {
     num_cpus::get() as u64
@@ -71,4 +74,60 @@ pub fn calc_pool_size(keys: usize, max_par: usize) -> usize {
         max_pool_size = max_par;
     }
     max_pool_size
+}
+
+pub fn build_source_keys<P>(
+    client: Arc<TestClient>,
+    source_file: P,
+    check_balance: bool,
+    target_amount: U256,
+    count: u64,
+) -> Vec<(secp256k1::SecretKey, Address, Vec<(Address, U256)>)>
+where
+    P: AsRef<Path>,
+{
+    let source_keys: Vec<KeyPair> =
+        serde_json::from_str(std::fs::read_to_string(source_file).unwrap().as_str()).unwrap();
+
+    let source_keys = source_keys
+        .par_iter()
+        .filter_map(|kp| {
+            let (secret, address) = (
+                secp256k1::SecretKey::from_str(kp.private.as_str()).unwrap(),
+                Address::from_str(kp.address.as_str()).unwrap(),
+            );
+            let balance = if check_balance {
+                client.balance(address, None)
+            } else {
+                U256::MAX
+            };
+            if balance > target_amount.mul(count) {
+                let target = (0..count)
+                    .map(|_| {
+                        (
+                            Address::from_str(one_eth_key().address.as_str()).unwrap(),
+                            target_amount,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                debug!("account {:?} added to source pool", address);
+                Some((secret, address, target))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    source_keys
+}
+
+pub fn display_info(client: Arc<TestClient>) -> (u64, U256) {
+    let chain_id = client.chain_id().unwrap().as_u64();
+    let gas_price = client.gas_price().unwrap();
+    info!("chain_id:     {}", chain_id);
+    info!("gas_price:    {}", gas_price);
+    info!("block_number: {}", client.block_number().unwrap());
+    info!("frc20 code:   {:?}", client.frc20_code().unwrap());
+
+    (chain_id, gas_price)
 }
