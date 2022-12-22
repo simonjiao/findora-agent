@@ -336,6 +336,7 @@ fn main() -> anyhow::Result<()> {
             delay: delay_in_blocks,
             max_threads,
             count,
+            source_count,
             source,
             block_time,
             timeout,
@@ -368,6 +369,7 @@ fn main() -> anyhow::Result<()> {
                 source_file,
                 *check_balance,
                 target_amount,
+                *source_count,
                 count,
                 max_par,
             );

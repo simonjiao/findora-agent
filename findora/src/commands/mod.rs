@@ -488,6 +488,10 @@ pub enum Commands {
         #[clap(long, default_value_t = 0)]
         count: u64,
 
+        /// The count of used source keys
+        #[clap(long)]
+        source_count: Option<u64>,
+
         /// the source account file
         #[clap(long, parse(from_os_str), value_name = "FILE", default_value = "source_keys.001")]
         source: PathBuf,

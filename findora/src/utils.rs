@@ -82,6 +82,7 @@ pub fn build_source_keys<P>(
     source_file: P,
     check_balance: bool,
     target_amount: U256,
+    source_count: Option<u64>,
     count: u64,
     max_par: u64,
 ) -> Vec<(secp256k1::SecretKey, Address, Vec<(Address, U256)>)>
@@ -98,7 +99,7 @@ where
         .unwrap();
     info!("thread pool size {}", max_pool_size);
 
-    let source_keys = source_keys
+    let mut source_keys = source_keys
         .par_iter()
         .filter_map(|kp| {
             let (secret, address) = (
@@ -126,6 +127,12 @@ where
             }
         })
         .collect::<Vec<_>>();
+
+    if let Some(source_count) = source_count {
+        if source_keys.len() > source_count as usize {
+            source_keys.truncate(source_count as usize);
+        }
+    }
 
     source_keys
 }
