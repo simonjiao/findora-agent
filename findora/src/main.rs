@@ -73,7 +73,7 @@ impl std::fmt::Display for BlockInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} {} {}",
+            "{},{},{},{}",
             self.number, self.timestamp, self.count, self.block_time
         )
     }
