@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod profiler;
 
+use std::ops::Add;
 use std::{
     cell::RefCell,
     cmp::Ordering,
@@ -332,7 +333,7 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Test {
             network,
             mode,
-            delay: _,
+            delay: delay_in_blocks,
             max_threads,
             count,
             source,
@@ -388,7 +389,7 @@ fn main() -> anyhow::Result<()> {
             for round in 0..u64::MAX {
                 loop {
                     let current = client.block_number().unwrap();
-                    if current > last_height + *need_wait_receipt as u64 {
+                    if current >= last_height.add(U64::from(*delay_in_blocks)) {
                         last_height = current;
                         break;
                     } else {
@@ -432,7 +433,6 @@ fn main() -> anyhow::Result<()> {
 
                 let elapsed = now.elapsed().as_secs();
                 info!("round {} time {}", round, elapsed);
-                //std::thread::sleep(Duration::from_secs(*delay));
             }
 
             let elapsed = now.elapsed().as_secs();

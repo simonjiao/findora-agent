@@ -476,8 +476,8 @@ pub enum Commands {
         #[clap(long)]
         mode: TestMode,
 
-        /// Delay time for next batch of transactions
-        #[clap(long, default_value_t = 15)]
+        /// Delay in blocks
+        #[clap(long, default_value_t = 1)]
         delay: u64,
 
         /// The max thread pool size
