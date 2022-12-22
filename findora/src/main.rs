@@ -384,17 +384,29 @@ fn main() -> anyhow::Result<()> {
             let total = source_keys.len() * count as usize;
             let now = std::time::Instant::now();
             for round in 0..u64::MAX {
-                let mut fetched = None;
+                let mut fetched: Option<BlockInfo> = None;
                 loop {
                     let current = client.block_number().unwrap();
                     if current >= last_height.add(U64::from(*delay_in_blocks)) {
                         last_height = current;
                         break;
                     } else {
-                        if fetched != Some(current.as_u64()) {
-                            para_eth_blocks(client.clone(), current.as_u64(), current.as_u64() + 1);
+                        if (fetched.is_some() && fetched.as_ref().unwrap().number != current.as_u64())
+                            || fetched.is_none()
+                        {
+                            let id = BlockId::Number(BlockNumber::Number(current));
+                            let bi = client.block_with_tx_hashes(id).map(|b| BlockInfo {
+                                number: b.number.unwrap().as_u64(),
+                                timestamp: b.timestamp,
+                                count: b.transactions.len(),
+                                block_time: if let Some(f) = fetched.as_ref() {
+                                    (b.timestamp - f.timestamp).as_u64() / 1000
+                                } else {
+                                    0u64
+                                },
+                            });
+                            fetched = Some(bi.unwrap());
                         }
-                        fetched = Some(current.as_u64());
                         std::thread::sleep(Duration::from_millis(1000));
                     }
                 }
