@@ -496,17 +496,9 @@ pub enum Commands {
         #[clap(long, parse(from_os_str), value_name = "FILE", default_value = "source_keys.001")]
         source: PathBuf,
 
-        /// block time of the network
-        #[clap(long, default_value_t = BLOCK_TIME)]
-        block_time: u64,
-
         /// http request timeout, seconds
         #[clap(long, default_value_t = 60)]
         timeout: u64,
-
-        /// if need to retry to sending transactions
-        #[clap(long)]
-        need_retry: bool,
 
         /// If need to check balance of source keys
         #[clap(long)]

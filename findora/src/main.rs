@@ -68,8 +68,7 @@ struct BlockInfo {
     block_time: u64,
 }
 
-fn para_eth_blocks(client: TestClient, start: u64, end: u64) {
-    let client = Arc::new(client);
+fn para_eth_blocks(client: Arc<TestClient>, start: u64, end: u64) {
     let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build().unwrap();
     let (tx, rx) = mpsc::channel();
     (start..end).for_each(|n| {
@@ -135,7 +134,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: Op
             let id = BlockId::Number(BlockNumber::Number(U64::from(range.start - 1)));
             Some((range.start - 1, client.block_with_tx_hashes(id).unwrap()))
         });
-        para_eth_blocks(client, range.start, range.end);
+        para_eth_blocks(Arc::new(client), range.start, range.end);
         //range
         //    .map(|number| {
         //        let id = BlockId::Number(BlockNumber::Number(U64::from(number)));
@@ -338,9 +337,7 @@ fn main() -> anyhow::Result<()> {
             count,
             source_count,
             source,
-            block_time,
             timeout,
-            need_retry,
             check_balance,
             wait_receipt: need_wait_receipt,
         }) => {
@@ -349,10 +346,8 @@ fn main() -> anyhow::Result<()> {
             }
             let max_par = *max_threads;
             let source_file = source;
-            let _block_time = Some(*block_time);
             let timeout = Some(*timeout);
             let count = *count;
-            let _need_retry = *need_retry;
 
             let target_amount = web3::types::U256::exp10(16); // 0.01 eth
 
@@ -389,12 +384,17 @@ fn main() -> anyhow::Result<()> {
             let total = source_keys.len() * count as usize;
             let now = std::time::Instant::now();
             for round in 0..u64::MAX {
+                let mut fetched = None;
                 loop {
                     let current = client.block_number().unwrap();
                     if current >= last_height.add(U64::from(*delay_in_blocks)) {
                         last_height = current;
                         break;
                     } else {
+                        if fetched != Some(current.as_u64()) {
+                            para_eth_blocks(client.clone(), current.as_u64(), current.as_u64() + 1);
+                        }
+                        fetched = Some(current.as_u64());
                         std::thread::sleep(Duration::from_millis(1000));
                     }
                 }
