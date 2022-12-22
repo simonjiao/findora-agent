@@ -340,6 +340,7 @@ fn main() -> anyhow::Result<()> {
             timeout,
             need_retry,
             check_balance,
+            wait_receipt: need_wait_receipt,
         }) => {
             if mode != &TestMode::Long {
                 return Ok(());
@@ -387,7 +388,7 @@ fn main() -> anyhow::Result<()> {
             for round in 0..u64::MAX {
                 loop {
                     let current = client.block_number().unwrap();
-                    if current > last_height {
+                    if current > last_height + *need_wait_receipt as u64 {
                         last_height = current;
                         break;
                     } else {
@@ -398,36 +399,39 @@ fn main() -> anyhow::Result<()> {
                 source_keys.par_iter().for_each(|(source, address, targets)| {
                     let last_batch = last_batch.clone();
                     let next = {
-                        let batch = last_batch.lock().unwrap();
-                        let hash: Option<(H256, u64)> = batch.get(source).map(|(h, r)| (*h, *r));
-                        drop(batch);
+                        if *need_wait_receipt {
+                            let batch = last_batch.lock().unwrap();
+                            let hash: Option<(H256, u64)> = batch.get(source).map(|(h, r)| (*h, *r));
+                            drop(batch);
 
-                        if let Some((hash, r)) = hash {
-                            if wait_receipt(client.clone(), hash) {
-                                Some(r + 1)
+                            if let Some((hash, r)) = hash {
+                                if wait_receipt(client.clone(), hash) {
+                                    Some(r + 1)
+                                } else {
+                                    None
+                                }
                             } else {
-                                None
+                                Some(0)
                             }
                         } else {
-                            Some(0)
+                            None
                         }
                     };
-                    if let Some(r) = next {
-                        let target = targets.get((r % count) as usize).unwrap();
-                        if let Some(nonce) = client.pending_nonce(*address) {
-                            if let Ok(hash) =
-                                client.distribution_simple(source, target, Some(chain_id), Some(gas_price), Some(nonce))
-                            {
-                                let mut batch_guard = last_batch.lock().unwrap();
-                                batch_guard.insert(*source, (hash, r));
-                                total_succeed.fetch_add(1, Relaxed);
-                            }
+                    let r = next.unwrap_or(round);
+                    let target = targets.get((r % count) as usize).unwrap();
+                    if let Some(nonce) = client.pending_nonce(*address) {
+                        if let Ok(hash) =
+                            client.distribution_simple(source, target, Some(chain_id), Some(gas_price), Some(nonce))
+                        {
+                            let mut batch_guard = last_batch.lock().unwrap();
+                            batch_guard.insert(*source, (hash, r));
+                            total_succeed.fetch_add(1, Relaxed);
                         }
                     }
                 });
 
                 let elapsed = now.elapsed().as_secs();
-                info!("round {}/{} time {}", round + 1, count, elapsed);
+                info!("round {} time {}", round, elapsed);
                 //std::thread::sleep(Duration::from_secs(*delay));
             }
 

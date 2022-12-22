@@ -507,5 +507,9 @@ pub enum Commands {
         /// If need to check balance of source keys
         #[clap(long)]
         check_balance: bool,
+
+        /// if need to wait for the tx receipt
+        #[clap(long)]
+        wait_receipt: bool,
     },
 }
