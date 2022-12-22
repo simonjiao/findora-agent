@@ -32,6 +32,7 @@ impl std::str::FromStr for TestMode {
         match s.to_lowercase().as_str() {
             "basic" => Ok(Self::Basic),
             "contract" => Ok(Self::Contract),
+            "long" => Ok(Self::Long),
             _ => Err("Invalid mode: basic and contract are supported".to_owned()),
         }
     }
