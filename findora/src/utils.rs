@@ -83,12 +83,20 @@ pub fn build_source_keys<P>(
     check_balance: bool,
     target_amount: U256,
     count: u64,
+    max_par: u64,
 ) -> Vec<(secp256k1::SecretKey, Address, Vec<(Address, U256)>)>
 where
     P: AsRef<Path>,
 {
     let source_keys: Vec<KeyPair> =
         serde_json::from_str(std::fs::read_to_string(source_file).unwrap().as_str()).unwrap();
+
+    let max_pool_size = calc_pool_size(source_keys.len(), max_par as usize);
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(max_pool_size)
+        .build_global()
+        .unwrap();
+    info!("thread pool size {}", max_pool_size);
 
     let source_keys = source_keys
         .par_iter()

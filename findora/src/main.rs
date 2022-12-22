@@ -361,15 +361,14 @@ fn main() -> anyhow::Result<()> {
             let (chain_id, gas_price) = display_info(client.clone());
 
             info!("preparing test data, it could take several minutes...");
-            let source_keys = build_source_keys(client.clone(), source_file, *check_balance, target_amount, count);
-
-            let max_pool_size = calc_pool_size(source_keys.len(), max_par as usize);
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(max_pool_size)
-                .build_global()
-                .unwrap();
-            info!("thread pool size {}", max_pool_size);
-
+            let source_keys = build_source_keys(
+                client.clone(),
+                source_file,
+                *check_balance,
+                target_amount,
+                count,
+                max_par,
+            );
             if count == 0 || source_keys.is_empty() {
                 error!("Not enough sufficient source accounts or target accounts, skipped.");
                 return Ok(());
@@ -377,11 +376,7 @@ fn main() -> anyhow::Result<()> {
 
             let total_succeed = AtomicU64::new(0);
             let last_batch = Arc::new(Mutex::new(BTreeMap::<secp256k1::SecretKey, (H256, u64)>::new()));
-            let concurrences = if source_keys.len() > max_pool_size {
-                max_pool_size
-            } else {
-                source_keys.len()
-            };
+            let concurrences = source_keys.len();
 
             // one-thread per source key
             info!("starting tests...");
