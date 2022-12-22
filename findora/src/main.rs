@@ -5,12 +5,13 @@ mod profiler;
 use std::{
     cell::RefCell,
     cmp::Ordering,
+    collections::BTreeMap,
     ops::{Mul, MulAssign, Sub},
     path::PathBuf,
     str::FromStr,
     sync::{
         atomic::{AtomicU64, Ordering::Relaxed},
-        mpsc, Arc,
+        mpsc, Arc, Mutex,
     },
     time::Duration,
 };
@@ -107,7 +108,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: Op
             .map(|c| match c.cmp(&0i64) {
                 Ordering::Equal => start..start + 1,
                 Ordering::Less => {
-                    let n = c.unsigned_abs() as u64;
+                    let n = c.unsigned_abs();
                     if start > n {
                         start - n..start + 1
                     } else {
@@ -211,7 +212,7 @@ fn fund_accounts(
         }
         let source_keys = (0..count).map(|_| one_eth_key()).collect::<Vec<_>>();
         let data = serde_json::to_string(&source_keys).unwrap();
-        std::fs::write("source_keys.001", &data).unwrap();
+        std::fs::write("source_keys.001", data).unwrap();
 
         source_keys
     };
@@ -222,7 +223,7 @@ fn fund_accounts(
 
         std::fs::rename("source_keys.001", ".source_keys.001.bak").unwrap();
         let data = serde_json::to_string(&source_keys).unwrap();
-        std::fs::write("source_keys.001", &data).unwrap();
+        std::fs::write("source_keys.001", data).unwrap();
     }
 
     let total = source_keys.len();
@@ -331,7 +332,7 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Test {
             network,
             mode,
-            delay,
+            delay: _,
             max_threads,
             count,
             source,
@@ -375,6 +376,7 @@ fn main() -> anyhow::Result<()> {
             }
 
             let total_succeed = AtomicU64::new(0);
+            let last_batch = Arc::new(Mutex::new(BTreeMap::<secp256k1::SecretKey, (H256, u64)>::new()));
             let concurrences = if source_keys.len() > max_pool_size {
                 max_pool_size
             } else {
@@ -387,31 +389,51 @@ fn main() -> anyhow::Result<()> {
             let mut last_height = start_height;
             let total = source_keys.len() * count as usize;
             let now = std::time::Instant::now();
-            for r in 0..count {
+            for round in 0..u64::MAX {
                 loop {
                     let current = client.block_number().unwrap();
                     if current > last_height {
                         last_height = current;
                         break;
                     } else {
-                        std::thread::sleep(Duration::from_millis(300));
+                        std::thread::sleep(Duration::from_millis(1000));
                     }
                 }
                 let now = std::time::Instant::now();
                 source_keys.par_iter().for_each(|(source, address, targets)| {
-                    let target = targets.get(r as usize).unwrap();
-                    if let Some(nonce) = client.pending_nonce(*address) {
-                        if client
-                            .distribution_simple(source, target, Some(chain_id), Some(gas_price), Some(nonce))
-                            .is_ok()
-                        {
-                            total_succeed.fetch_add(1, Relaxed);
+                    let last_batch = last_batch.clone();
+                    let next = {
+                        let batch = last_batch.lock().unwrap();
+                        let hash: Option<(H256, u64)> = batch.get(source).map(|(h, r)| (*h, *r));
+                        drop(batch);
+
+                        if let Some((hash, r)) = hash {
+                            if wait_receipt(client.clone(), hash) {
+                                Some(r + 1)
+                            } else {
+                                None
+                            }
+                        } else {
+                            Some(0)
+                        }
+                    };
+                    if let Some(r) = next {
+                        let target = targets.get((r % count) as usize).unwrap();
+                        if let Some(nonce) = client.pending_nonce(*address) {
+                            if let Ok(hash) =
+                                client.distribution_simple(source, target, Some(chain_id), Some(gas_price), Some(nonce))
+                            {
+                                let mut batch_guard = last_batch.lock().unwrap();
+                                batch_guard.insert(*source, (hash, r));
+                                total_succeed.fetch_add(1, Relaxed);
+                            }
                         }
                     }
                 });
+
                 let elapsed = now.elapsed().as_secs();
-                info!("round {}/{} time {}", r + 1, count, elapsed);
-                std::thread::sleep(Duration::from_secs(*delay));
+                info!("round {}/{} time {}", round + 1, count, elapsed);
+                //std::thread::sleep(Duration::from_secs(*delay));
             }
 
             let elapsed = now.elapsed().as_secs();

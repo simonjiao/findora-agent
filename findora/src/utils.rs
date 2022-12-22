@@ -2,6 +2,7 @@ use crate::{one_eth_key, KeyPair, TestClient};
 use log::{debug, info};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
+use std::time::Duration;
 use std::{ops::Mul, path::Path, str::FromStr, sync::Arc};
 use url::Url;
 use web3::types::{Address, H256, U256};
@@ -50,7 +51,7 @@ where
     let root_pk = secp256k1::PublicKey::from_secret_key(&s, &root_sk);
     let mut res = [0u8; 64];
     res.copy_from_slice(&root_pk.serialize_uncompressed()[1..65]);
-    let root_addr = Address::from(H256::from_slice(Keccak256::digest(&res).as_slice()));
+    let root_addr = Address::from(H256::from_slice(Keccak256::digest(res).as_slice()));
 
     (root_sk, root_addr)
 }
@@ -130,4 +131,10 @@ pub fn display_info(client: Arc<TestClient>) -> (u64, U256) {
     info!("frc20 code:   {:?}", client.frc20_code().unwrap());
 
     (chain_id, gas_price)
+}
+
+pub fn wait_receipt(client: Arc<TestClient>, hash: H256) -> bool {
+    let (_, receipt) = client.wait_for_tx_receipt(hash, Duration::from_secs(1), 3);
+
+    receipt.is_some()
 }

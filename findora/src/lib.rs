@@ -75,14 +75,14 @@ pub struct KeyPair {
 pub fn one_eth_key() -> KeyPair {
     let mnemonic = Mnemonic::generate_in(Language::English, Count::Words12);
     let bs = mnemonic.to_seed("");
-    let ext = XPrv::derive_from_path(&bs, &DerivationPath::from_str("m/44'/60'/0'/0/0").unwrap()).unwrap();
+    let ext = XPrv::derive_from_path(bs, &DerivationPath::from_str("m/44'/60'/0'/0/0").unwrap()).unwrap();
 
     let secret = SecretKey::parse_slice(&ext.to_bytes()).unwrap();
     let public = PublicKey::from_secret_key(&secret);
 
     let mut res = [0u8; 64];
     res.copy_from_slice(&public.serialize()[1..65]);
-    let public = H160::from(H256::from_slice(Keccak256::digest(&res).as_slice()));
+    let public = H160::from(H256::from_slice(Keccak256::digest(res).as_slice()));
 
     KeyPair {
         address: eth_checksum::checksum(&format!("{:?}", public)),
