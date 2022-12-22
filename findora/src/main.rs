@@ -405,6 +405,7 @@ fn main() -> anyhow::Result<()> {
                                     0u64
                                 },
                             });
+                            info!("{:?}", bi.as_ref().unwrap());
                             fetched = Some(bi.unwrap());
                         }
                         std::thread::sleep(Duration::from_millis(1000));
