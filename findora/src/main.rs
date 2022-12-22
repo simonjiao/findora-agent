@@ -394,26 +394,30 @@ fn main() -> anyhow::Result<()> {
             let mut last_height = start_height;
             let total = source_keys.len() * count as usize;
             let now = std::time::Instant::now();
+            let id = BlockId::Number(BlockNumber::Number(start_height));
+            let mut fetched = client
+                .block_with_tx_hashes(id)
+                .map(|b| BlockInfo {
+                    number: b.number.unwrap().as_u64(),
+                    timestamp: b.timestamp,
+                    count: b.transactions.len(),
+                    block_time: 0u64,
+                })
+                .unwrap();
             for round in 0..u64::MAX {
-                let mut fetched: Option<BlockInfo> = None;
                 loop {
                     let current = client.block_number().unwrap();
 
-                    if (fetched.is_some() && fetched.as_ref().unwrap().number != current.as_u64()) || fetched.is_none()
-                    {
+                    if fetched.number != current.as_u64() {
                         let id = BlockId::Number(BlockNumber::Number(current));
                         let bi = client.block_with_tx_hashes(id).map(|b| BlockInfo {
                             number: b.number.unwrap().as_u64(),
                             timestamp: b.timestamp,
                             count: b.transactions.len(),
-                            block_time: if let Some(f) = fetched.as_ref() {
-                                (b.timestamp - f.timestamp).as_u64()
-                            } else {
-                                0u64
-                            },
+                            block_time: (b.timestamp - fetched.timestamp).as_u64(),
                         });
                         info!("BlockInfo {}", bi.as_ref().unwrap());
-                        fetched = Some(bi.unwrap());
+                        fetched = bi.unwrap();
                     }
 
                     if current >= last_height.add(U64::from(*delay_in_blocks)) {
