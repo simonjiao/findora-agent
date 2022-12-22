@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod profiler;
 
+use std::fmt::Formatter;
 use std::ops::Add;
 use std::{
     cell::RefCell,
@@ -66,6 +67,16 @@ struct BlockInfo {
     timestamp: U256,
     count: usize,
     block_time: u64,
+}
+
+impl std::fmt::Display for BlockInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {} {}",
+            self.number, self.timestamp, self.count, self.block_time
+        )
+    }
 }
 
 fn para_eth_blocks(client: Arc<TestClient>, start: u64, end: u64) {
@@ -400,12 +411,12 @@ fn main() -> anyhow::Result<()> {
                                 timestamp: b.timestamp,
                                 count: b.transactions.len(),
                                 block_time: if let Some(f) = fetched.as_ref() {
-                                    (b.timestamp - f.timestamp).as_u64() / 1000
+                                    (b.timestamp - f.timestamp).as_u64()
                                 } else {
                                     0u64
                                 },
                             });
-                            info!("{:?}", bi.as_ref().unwrap());
+                            info!("BlockInfo {}", bi.as_ref().unwrap());
                             fetched = Some(bi.unwrap());
                         }
                         std::thread::sleep(Duration::from_millis(1000));
