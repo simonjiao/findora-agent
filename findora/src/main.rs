@@ -5,10 +5,8 @@ mod profiler;
 use std::fmt::Formatter;
 use std::ops::Add;
 use std::{
-    cell::RefCell,
-    cmp::Ordering,
     collections::BTreeMap,
-    ops::{Mul, MulAssign, Sub},
+    ops::{Mul, MulAssign},
     path::PathBuf,
     str::FromStr,
     sync::{
@@ -22,7 +20,7 @@ use commands::*;
 use feth::{one_eth_key, parse_call_json, parse_deploy_json, parse_query_json, utils::*, TestClient};
 use log::{debug, error, info};
 use rayon::prelude::*;
-use web3::types::{Address, Block, BlockId, BlockNumber, TransactionId, H256, U256, U64};
+use web3::types::{Address, BlockId, BlockNumber, TransactionId, H256, U256, U64};
 
 fn eth_transaction(network: &str, timeout: Option<u64>, hash: H256) {
     let network = real_network(network);
@@ -79,6 +77,7 @@ impl std::fmt::Display for BlockInfo {
     }
 }
 
+#[allow(unused)]
 fn para_eth_blocks(client: Arc<TestClient>, start: u64, end: u64) {
     let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build().unwrap();
     let (tx, rx) = mpsc::channel();
@@ -110,84 +109,46 @@ fn para_eth_blocks(client: Arc<TestClient>, start: u64, end: u64) {
     })
 }
 
-fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: Option<i64>) {
-    let network = real_network(network);
-    // use first endpoint to fund accounts
-    let client = TestClient::setup(network[0].clone(), timeout);
-    if let Some(start) = start {
-        let range = count
-            .map(|c| match c.cmp(&0i64) {
-                Ordering::Equal => start..start + 1,
-                Ordering::Less => {
-                    let n = c.unsigned_abs();
-                    if start > n {
-                        start - n..start + 1
-                    } else {
-                        0..start + 1
-                    }
-                }
-                Ordering::Greater => start..start + c.unsigned_abs() as u64 + 1,
-            })
-            .unwrap_or_else(|| match client.block_number() {
-                Some(end) if start > end.as_u64() => {
-                    panic!(
-                        "start block height is bigger than latest height({}>{})",
-                        start,
-                        end.as_u64()
-                    );
-                }
-                Some(end) => start..end.as_u64() + 1,
-                None => panic!("Failed to obtain block height"),
-            });
-        let _last_block: RefCell<Option<(u64, Block<H256>)>> = RefCell::new(if range.start == 0 {
-            None
+fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u64, follow: bool) {
+    let client = TestClient::setup(Some(network.to_string()), timeout);
+    let start = start.unwrap_or_else(|| client.block_number().unwrap().as_u64());
+    if !follow && count == 0 {
+        panic!("Need a non-zero block count for a non-follow mode");
+    }
+    let mut fetched = {
+        let id = if start == 0 {
+            BlockId::Number(BlockNumber::Number(U64::zero()))
         } else {
-            let id = BlockId::Number(BlockNumber::Number(U64::from(range.start - 1)));
-            Some((range.start - 1, client.block_with_tx_hashes(id).unwrap()))
-        });
-        para_eth_blocks(Arc::new(client), range.start, range.end);
-        //range
-        //    .map(|number| {
-        //        let id = BlockId::Number(BlockNumber::Number(U64::from(number)));
-        //        client.block_with_tx_hashes(id).map(|block| {
-        //            let block_time = match &*last_block.borrow() {
-        //                Some(last) if last.0 + 1 == number => (block.timestamp - last.1.timestamp).as_u64(),
-        //                _ => 0u64,
-        //            };
-        //            let count = block.transactions.len();
-        //            let timestamp = block.timestamp;
-        //            *last_block.borrow_mut() = Some((number, block));
-        //            (number, timestamp, count, block_time)
-        //        })
-        //    })
-        //    .for_each(|block| {
-        //        let msg = if let Some(block) = block {
-        //            format!("{},{:?},{},{}", block.0, block.1, block.2, block.3)
-        //        } else {
-        //            "None".to_string()
-        //        };
-        //        log::info!("{}", msg);
-        //    });
-    } else if let Some(b) = client.current_block() {
-        let block_time = match b.number {
-            Some(n) if n > U64::zero() => {
-                if let Some(last) = client.block_with_tx_hashes(BlockId::Number(BlockNumber::Number(n.sub(1)))) {
-                    Some(b.timestamp - last.timestamp)
-                } else {
-                    None
-                }
-            }
-            _ => None,
+            BlockId::Number(BlockNumber::Number(U64::from(start - 1)))
         };
-        log::info!(
-            "{},{:?},{},{}",
-            b.number.unwrap_or_default(),
-            b.timestamp,
-            b.transactions.len(),
-            block_time.unwrap_or_default(),
+        client
+            .block_with_tx_hashes(id)
+            .map(|b| BlockInfo {
+                number: b.number.unwrap().as_u64(),
+                timestamp: b.timestamp,
+                count: b.transactions.len(),
+                block_time: 0u64,
+            })
+            .unwrap()
+    };
+
+    let range = start..if follow { u64::MAX } else { start + count };
+    for b in range {
+        let id = BlockId::Number(BlockNumber::Number(U64::from(b)));
+        let current = client
+            .block_with_tx_hashes(id)
+            .map(|b| BlockInfo {
+                number: b.number.unwrap().as_u64(),
+                timestamp: b.timestamp,
+                count: b.transactions.len(),
+                block_time: (b.timestamp - fetched.timestamp).as_u64(),
+            })
+            .unwrap();
+        info!(
+            "{},{},{},{}",
+            current.number, current.timestamp, current.count, current.block_time,
         );
-    } else {
-        error!("Cannot obtain current block");
+        fetched = current;
     }
 }
 
@@ -313,8 +274,9 @@ fn main() -> anyhow::Result<()> {
             timeout,
             start,
             count,
+            follow,
         }) => {
-            eth_blocks(network.get_url().as_str(), *timeout, *start, *count);
+            eth_blocks(network.get_url().as_str(), *timeout, *start, *count, *follow);
             Ok(())
         }
         Some(Commands::Etl {
@@ -455,8 +417,10 @@ fn main() -> anyhow::Result<()> {
                         if let Ok(hash) =
                             client.distribution_simple(source, target, Some(chain_id), Some(gas_price), Some(nonce))
                         {
-                            let mut batch_guard = last_batch.lock().unwrap();
-                            batch_guard.insert(*source, (hash, r));
+                            if *need_wait_receipt {
+                                let mut batch_guard = last_batch.lock().unwrap();
+                                batch_guard.insert(*source, (hash, r));
+                            }
                             total_succeed.fetch_add(1, Relaxed);
                         }
                     }

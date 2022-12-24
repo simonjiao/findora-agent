@@ -44,6 +44,7 @@ pub enum Network {
     Anvil,
     Main,
     Test,
+    Archive,
     Qa(u32, Option<u32>),
     Node(String),
 }
@@ -58,6 +59,7 @@ pub enum ContractOP {
 const LOCAL_URL: &str = "http://localhost:8545";
 const ANVIL_URL: &str = "https://prod-testnet.prod.findora.org:8545";
 const MAIN_URL: &str = "https://prod-mainnet.prod.findora.org:8545";
+const ARCHIVE_URL: &str = "https://archive.prod.findora.org:8545";
 const MY_TEST_URL: &str = "http://34.211.109.216:8545";
 
 impl Network {
@@ -67,6 +69,7 @@ impl Network {
             Network::Anvil => ANVIL_URL.to_owned(),
             Network::Main => MAIN_URL.to_owned(),
             Network::Test => MY_TEST_URL.to_owned(),
+            Network::Archive => ARCHIVE_URL.to_owned(),
             Network::Qa(cluster, node) => {
                 if let Some(node) = node {
                     format!(
@@ -91,6 +94,7 @@ impl std::str::FromStr for Network {
             "anvil" => Ok(Self::Anvil),
             "main" => Ok(Self::Main),
             "test" => Ok(Self::Test),
+            "archive" => Ok(Self::Archive),
             network if network.starts_with("qa") => {
                 // --network qa,01,02
                 let segs: Vec<&str> = network.splitn(3, ',').collect();
@@ -413,9 +417,13 @@ pub enum Commands {
         #[clap(long)]
         start: Option<u64>,
 
-        /// block count, could be less than zero
-        #[clap(long)]
-        count: Option<i64>,
+        /// block count
+        #[clap(long, default_value_t = 0)]
+        count: u64,
+
+        /// follow the newest blocks
+        #[clap(short, long)]
+        follow: bool,
     },
 
     /// ETL procession
