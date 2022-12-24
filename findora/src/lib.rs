@@ -187,7 +187,6 @@ impl TestClient {
             if times == Some(retries) || times == Some(0u64) {
                 break None;
             }
-            warn!("retries {}", retries);
             retries += 1;
             std::thread::sleep(Duration::from_secs(interval));
         }
