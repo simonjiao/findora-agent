@@ -515,5 +515,9 @@ pub enum Commands {
         /// if need to wait for the tx receipt
         #[clap(long)]
         wait_receipt: bool,
+
+        /// if need to fetch block info
+        #[clap(long)]
+        fetch_block: bool,
     },
 }

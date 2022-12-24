@@ -313,6 +313,7 @@ fn main() -> anyhow::Result<()> {
             timeout,
             check_balance,
             wait_receipt: need_wait_receipt,
+            fetch_block: need_fetch_block,
         }) => {
             if mode != &TestMode::Long {
                 return Ok(());
@@ -322,7 +323,7 @@ fn main() -> anyhow::Result<()> {
             let timeout = Some(*timeout);
             let count = *count;
 
-            let target_amount = web3::types::U256::exp10(16); // 0.01 eth
+            let target_amount = web3::types::U256::exp10(14); // 0.0001 eth
 
             check_parallel_args(max_par);
 
@@ -370,7 +371,7 @@ fn main() -> anyhow::Result<()> {
                 loop {
                     let current = client.block_number().unwrap();
 
-                    if fetched.number != current.as_u64() {
+                    if *need_fetch_block && fetched.number != current.as_u64() {
                         let id = BlockId::Number(BlockNumber::Number(current));
                         let bi = client.block_with_tx_hashes(id).map(|b| BlockInfo {
                             number: b.number.unwrap().as_u64(),
