@@ -49,7 +49,7 @@ update_consensus_default() {
 }
 
 # kill related process and wait 5 seconds
-pids=$(ps -ef|grep "devnet/$node"|grep -v grep|awk '{print $2}'); for pid in ${pids}; do kill -9 "$pid"; done
+pids=$(ps -ef|grep -w "devnet/$node"|grep -v grep|awk '{print $2}'); for pid in ${pids}; do kill -9 "$pid"; done
 sleep 5
 
 #update consensus
