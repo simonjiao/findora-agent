@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-root_dir=/tmp/findorad
+root_dir=/tmp/findora
 node=$1
 
 file=${root_dir}/devnet/${node}/config/config.toml
