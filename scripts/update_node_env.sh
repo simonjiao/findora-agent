@@ -1,19 +1,3 @@
-#!/usr/bin/env bash
-
-root_dir=/tmp/findora
-node=$1
-consensus=$2
-
-if [ -z "$node" ]; then
-    echo "Empty node"
-    exit 1
-fi
-
-if [ -z "$consensus" ]; then
-    consensus="one"
-fi
-
-file=${root_dir}/devnet/${node}/config/config.toml
 
 update_consensus_one() {
     file=$1
@@ -48,35 +32,47 @@ update_consensus_default() {
     perl -pi -e 's/(timeout_commit = )".*"/$1"15s"/' $file
 }
 
-# kill related process and wait 5 seconds
-pids=$(ps -ef|grep -w "devnet/$node"|grep -v grep|awk '{print $2}'); for pid in ${pids}; do kill -9 "$pid"; done
-sleep 5
+restart_node() {
+    node=$1
+    wait=$2
 
-#update consensus
-case "$consensus" in
-"one")
-    update_consensus_one "$file"
-    ;;
-"main")
-    update_consensus_mainnet "$file"
-    ;;
-"default")
-    update_consensus_default "$file"
-    ;;
-*)
-    echo "Invalid consensus"
-    exit 1
-    ;;
-esac
+    if [ -z "$wait" ]; then
+        wait=5
+    fi
 
-SelfAddr=$(grep 'address' ${root_dir}/devnet/"${node}"/config/priv_validator_key.json | grep -oE '[^",]{40}');
-#ENABLE_QUERY_SERVICE=true \
-TD_NODE_SELF_ADDR=$SelfAddr \
-RUST_LOG=info \
-LEDGER_DIR=$root_dir/devnet/$node/abci \
-ENABLE_ETH_API_SERVICE=true \
-ARC_HISTORY=4,2 \
-abcid "${root_dir}/devnet/${node}" >> "$root_dir/devnet/$node/abcid.log" 2>&1 &
+    # kill related process and wait 5 seconds
+    pids=$(ps -ef|grep -w "devnet/$node"|grep -v grep|awk '{print $2}'); for pid in ${pids}; do kill -9 "$pid"; done
+    sleep "$wait"
 
-sleep 5
-tendermint node --home "${root_dir}/devnet/${node}" >> "$root_dir/devnet/$node/consensus.log" 2>&1 &
+    SelfAddr=$(grep 'address' ${root_dir}/devnet/"${node}"/config/priv_validator_key.json | grep -oE '[^",]{40}');
+    #ENABLE_QUERY_SERVICE=true \
+    TD_NODE_SELF_ADDR=$SelfAddr \
+    RUST_LOG=info \
+    LEDGER_DIR=$root_dir/devnet/$node/abci \
+    ENABLE_ETH_API_SERVICE=true \
+    ARC_HISTORY=4,2 \
+    abcid "${root_dir}/devnet/${node}" >> "$root_dir/devnet/$node/abcid.log" 2>&1 &
+
+    sleep "$wait"
+    tendermint node --home "$root_dir/devnet/$node" >> "$root_dir/devnet/$node/consensus.log" 2>&1 &
+}
+
+update_consensus() {
+    consensus=$1
+    file=$2
+    case "$consensus" in
+    "one")
+        update_consensus_one "$file"
+        ;;
+    "main")
+        update_consensus_mainnet "$file"
+        ;;
+    "default")
+        update_consensus_default "$file"
+        ;;
+    *)
+        echo "Invalid consensus"
+        exit 1
+        ;;
+    esac
+}
