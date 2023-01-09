@@ -46,7 +46,9 @@ if [ "$mode" == "fast_half" ]; then
         node="node$i"
         file="$root_dir/devnet/$node/config/config.toml"
         update_consensus "$consensus" "$file"
+        echo "current_height $(current_height) before restart"
         restart_node "$node" 5
+        echo "current_height $(current_height) after restart"
     done
 elif [ "$mode" == "fast_two_third" ]; then
     for ((i=0; i<21; i++)); do
@@ -57,7 +59,9 @@ elif [ "$mode" == "fast_two_third" ]; then
         fi
         file="$root_dir/devnet/$node/config/config.toml"
         update_consensus "$consensus" "$file"
+        echo "current_height $(current_height) before restart"
         restart_node "$node" 5
+        echo "current_height $(current_height) after restart"
     done
 elif [ "$mode" == "swarm_reboot" ]; then
     for node in $nodes; do
@@ -65,22 +69,28 @@ elif [ "$mode" == "swarm_reboot" ]; then
         update_consensus "$consensus" "$file"
     done
 
+    echo "current_height $(current_height) before restart"
     for node in $nodes; do
         restart_node "$node" 5 &
         sleep 5
     done
+    echo "current_height $(current_height) after restart"
 elif [ "$mode" == "seq" ];  then
     for node in $nodes; do
         file="$root_dir/devnet/$node/config/config.toml"
         update_consensus "$consensus" "$file"
+        echo "current_height $(current_height) before restart"
         restart_node "$node" 5
+        echo "current_height $(current_height) after restart"
         sleep "$interval"
     done
 elif [ "$mode" == "single" ]; then
     node=$2
     file="$root_dir/devnet/$node/config/config.toml"
     update_consensus "$consensus" "$file"
+    echo "current_height $(current_height) before restart"
     restart_node "$node" 5
+    echo "current_height $(current_height) after restart"
 else
     echo "mode \"$mode\" not support yet!"
 fi
