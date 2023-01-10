@@ -9,7 +9,7 @@ MAX_NODE=20
 mode=$1
 
 case "$mode" in
-"single" | "seq" | "fast_half" | "fast_two_third" |"swarm_reboot")
+"single" | "seq" | "fast_half" | "fast_half_1" | "fast_two_third" |"swarm_reboot")
     ;;
 *)
     echo "Invalid mode \"$mode\""
@@ -25,7 +25,7 @@ if [ "$mode" != "single" ]; then
     done
     interval=$2
     if [ -z "$interval" ]; then
-        interval=30
+        interval=10
     fi
 fi
 
@@ -36,8 +36,15 @@ fi
 
 . ./update_node_env.sh
 
-if [ "$mode" == "fast_half" ]; then
+if [ "$mode" == "fast_half" ] || [ "$mode" == "fast_half_1" ]; then
     for ((i=0; i<21; i++)); do
+        if (( i == 11 )); then
+            if [ "$mode" == "fast_half_1" ]; then
+                sleep 1200
+            else
+                sleep "$interval"
+            fi
+        fi
         if (( i > 11 )); then
             sleep 1200
         else
