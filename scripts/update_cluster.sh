@@ -38,14 +38,13 @@ fi
 
 if [ "$mode" == "fast_half" ] || [ "$mode" == "fast_half_1" ]; then
     for ((i=0; i<21; i++)); do
-        if (( i == 11 )); then
+        if (( i == 10 )); then
             if [ "$mode" == "fast_half_1" ]; then
                 sleep 1200
             else
                 sleep "$interval"
             fi
-        fi
-        if (( i > 11 )); then
+        elif (( i >= 11 )); then
             sleep 1200
         else
             sleep "$interval"
