@@ -3,7 +3,7 @@ use feth::error::{Error, Result};
 use redis::Client;
 
 #[derive(Debug, Display)]
-#[display(fmt = "{}, {}, {:?}", proto, endpoint, client)]
+#[display(fmt = "{proto}, {endpoint}, {client:?}")]
 pub struct Db {
     endpoint: String,
     proto: Proto,
@@ -22,7 +22,7 @@ impl std::fmt::Display for Proto {
             Self::Unix => "unix socket",
             Self::Url => "redis",
         };
-        write!(f, "{}", proto)
+        write!(f, "{proto}")
     }
 }
 
@@ -40,14 +40,14 @@ impl Db {
             Proto::Url => {
                 let mut endpoint = "redis://".to_string();
                 if let Some((user, passwd)) = auth {
-                    endpoint.push_str(format!("{}:{}@", user, passwd).as_str());
+                    endpoint.push_str(format!("{user}:{passwd}@").as_str());
                 }
                 endpoint.push_str(path);
                 if let Some(port) = port {
-                    endpoint.push_str(format!(":{}", port).as_str());
+                    endpoint.push_str(format!(":{port}").as_str());
                 }
                 if let Some(db) = db {
-                    endpoint.push_str(format!("/{}", db).as_str());
+                    endpoint.push_str(format!("/{db}").as_str());
                 }
                 endpoint
             }

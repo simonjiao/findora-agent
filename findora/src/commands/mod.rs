@@ -73,11 +73,10 @@ impl Network {
             Network::Qa(cluster, node) => {
                 if let Some(node) = node {
                     format!(
-                        "http://dev-qa{:0>2}-us-west-2-full-{:0>3}-open.dev.findora.org:8545",
-                        cluster, node
+                        "http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org:8545"
                     )
                 } else {
-                    format!("https://dev-qa{:0>2}.dev.findora.org:8545", cluster)
+                    format!("https://dev-qa{cluster:0>2}.dev.findora.org:8545")
                 }
             }
             Network::Node(url) => url.to_owned(),
@@ -336,7 +335,7 @@ impl Cli {
     }
 
     pub(crate) fn profiler(network: &str, enabled: bool) -> Result<()> {
-        let url = format!("{}/configuration", network);
+        let url = format!("{network}/configuration");
         profiler::set_profiler(url.as_str(), enabled)
     }
 }

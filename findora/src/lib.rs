@@ -85,7 +85,7 @@ pub fn one_eth_key() -> KeyPair {
     let public = H160::from(H256::from_slice(Keccak256::digest(res).as_slice()));
 
     KeyPair {
-        address: eth_checksum::checksum(&format!("{:?}", public)),
+        address: eth_checksum::checksum(&format!("{public:?}")),
         private: hex::encode(secret.serialize()),
     }
 }

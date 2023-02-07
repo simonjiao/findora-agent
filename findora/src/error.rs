@@ -26,11 +26,11 @@ impl std::fmt::Display for Error {
             Error::CheckTx => write!(f, "tx check failed"),
             Error::SyncTx => write!(f, "tx not accepted by tendermint"),
             Error::SendErr => write!(f, "tx not sent"),
-            Error::TxInternalErr(e) => write!(f, "Internal Error:: {:?}", e),
-            Error::Io(e) => write!(f, "Io error {:?}", e),
-            Error::Db(e) => write!(f, "Database error {:?}", e),
-            Error::NotSupport(e) => write!(f, "Not support: {}", e),
-            Error::Unknown(e) => write!(f, "a unknown error happened: {}", e),
+            Error::TxInternalErr(e) => write!(f, "Internal Error:: {e:?}"),
+            Error::Io(e) => write!(f, "Io error {e:?}"),
+            Error::Db(e) => write!(f, "Database error {e:?}"),
+            Error::NotSupport(e) => write!(f, "Not support: {e}"),
+            Error::Unknown(e) => write!(f, "a unknown error happened: {e}"),
         }
     }
 }

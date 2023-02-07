@@ -65,7 +65,7 @@ pub fn check_parallel_args(max_par: u64) {
         )
     }
     if max_par == 0 {
-        panic!("Invalid parallel parameters: max {}", max_par);
+        panic!("Invalid parallel parameters: max {max_par}");
     }
 }
 
