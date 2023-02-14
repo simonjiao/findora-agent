@@ -229,6 +229,19 @@ fn fund_accounts(
     //std::fs::write("metrics.001", &data).unwrap();
 }
 
+fn node_operation(network: &str, op: &Operation) {
+    let node = real_network(network).iter().filter_map(|n|n.map(
+        |mut n1| {
+            if op == &Operation::DisplayCheckpoint {
+                n1.push_str(format!("/{op}").as_str());
+            }
+            n1
+        }
+    )).take(1).next();
+
+    let client = TestClient::setup(node, Some(30));
+}
+
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
@@ -440,6 +453,9 @@ fn main() -> anyhow::Result<()> {
                 total_succeed, total, concurrences, avg, elapsed, start_height, end_height,
             );
             Ok(())
+        }
+        Some(Commands::Node { network, op }) => {
+            let network =
         }
         None => Ok(()),
     }

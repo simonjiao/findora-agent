@@ -42,6 +42,7 @@ impl std::str::FromStr for TestMode {
 pub enum Network {
     Local,
     Anvil,
+    AnvilLedger,
     Main,
     Test,
     Archive,
@@ -56,8 +57,33 @@ pub enum ContractOP {
     Query,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum Operation {
+    DisplayCheckpoint,
+}
+
+impl std::fmt::Display for Operation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DisplayCheckpoint => write!(f, "display_checkpoint"),
+        }
+    }
+}
+
+impl std::str::FromStr for Operation {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "checkpoint" => Ok(Self::DisplayCheckpoint),
+            _ => Err("not support operation".to_owned()),
+        }
+    }
+}
+
 const LOCAL_URL: &str = "http://localhost:8545";
 const ANVIL_URL: &str = "https://prod-testnet.prod.findora.org:8545";
+const ANVIL_LEDGER_URL: &str = "https://prod-testnet.prod.findora.org:8668";
 const MAIN_URL: &str = "https://prod-mainnet.prod.findora.org:8545";
 const ARCHIVE_URL: &str = "https://archive.prod.findora.org:8545";
 const MY_TEST_URL: &str = "http://34.211.109.216:8545";
@@ -72,14 +98,13 @@ impl Network {
             Network::Archive => ARCHIVE_URL.to_owned(),
             Network::Qa(cluster, node) => {
                 if let Some(node) = node {
-                    format!(
-                        "http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org:8545"
-                    )
+                    format!("http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org:8545")
                 } else {
                     format!("https://dev-qa{cluster:0>2}.dev.findora.org:8545")
                 }
             }
             Network::Node(url) => url.to_owned(),
+            Network::AnvilLedger => ANVIL_LEDGER_URL.to_owned(),
         }
     }
 }
@@ -91,6 +116,7 @@ impl std::str::FromStr for Network {
         match s.to_owned().as_str() {
             "local" => Ok(Self::Local),
             "anvil" => Ok(Self::Anvil),
+            "anvil_ledger" => Ok(Self::AnvilLedger),
             "main" => Ok(Self::Main),
             "test" => Ok(Self::Test),
             "archive" => Ok(Self::Archive),
@@ -472,6 +498,16 @@ pub enum Commands {
         /// http request timeout, seconds
         #[clap(long)]
         timeout: Option<u64>,
+    },
+
+    /// Node operations
+    Node {
+        /// ethereum-compatible or findora node
+        #[clap(long)]
+        network: Network,
+
+        #[clap(long)]
+        op: Operation,
     },
     /// Test
     Test {
