@@ -152,6 +152,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fund_accounts(
     network: &str,
     timeout: Option<u64>,
@@ -160,6 +161,7 @@ fn fund_accounts(
     am: u64,
     load: bool,
     redeposit: bool,
+    seq: bool,
 ) {
     let mut amount = web3::types::U256::exp10(17); // 0.1 eth
     amount.mul_assign(am);
@@ -221,9 +223,17 @@ fn fund_accounts(
         })
         .collect::<Vec<_>>();
     // 1000 eth
-    let _metrics = client
-        .distribution(1, None, &source_accounts, &Some(block_time), true, true)
-        .unwrap();
+    if seq {
+        client
+            .rt
+            .block_on(client.distribute(&client.root_sk, &source_accounts))
+            .unwrap();
+    } else {
+        let _metrics = client
+            .distribution(1, None, &source_accounts, &Some(block_time), true, true)
+            .unwrap();
+    }
+
     // save metrics to file
     //let data = serde_json::to_string(&metrics).unwrap();
     //std::fs::write("metrics.001", &data).unwrap();
@@ -245,6 +255,7 @@ fn main() -> anyhow::Result<()> {
             amount,
             load,
             redeposit,
+            seq,
         }) => {
             fund_accounts(
                 network.get_url().as_str(),
@@ -254,6 +265,7 @@ fn main() -> anyhow::Result<()> {
                 *amount,
                 *load,
                 *redeposit,
+                *seq,
             );
             Ok(())
         }

@@ -72,9 +72,7 @@ impl Network {
             Network::Archive => ARCHIVE_URL.to_owned(),
             Network::Qa(cluster, node) => {
                 if let Some(node) = node {
-                    format!(
-                        "http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org:8545"
-                    )
+                    format!("http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org:8545")
                 } else {
                     format!("https://dev-qa{cluster:0>2}.dev.findora.org:8545")
                 }
@@ -371,6 +369,10 @@ pub enum Commands {
         /// re-deposit account with insufficient balance
         #[clap(long)]
         redeposit: bool,
+
+        /// fund in a sequential way or not
+        #[clap(long)]
+        seq: bool,
     },
     /// check ethereum account information
     Info {

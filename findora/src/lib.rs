@@ -31,7 +31,8 @@ use std::{
     time::Duration,
 };
 
-use tokio::{runtime::Runtime, sync::mpsc::Receiver, sync::Mutex};
+use tokio::{runtime::Runtime, sync::mpsc::Receiver, sync::Mutex, task};
+use web3::futures::TryFutureExt;
 use web3::{
     self,
     api::Eth,
@@ -115,7 +116,7 @@ pub struct TestClient {
     pub root_sk: secp256k1::SecretKey,
     pub root_addr: Address,
     pub overflow_flag: AtomicUsize,
-    rt: Runtime,
+    pub rt: Runtime,
 }
 
 #[derive(Debug)]
@@ -574,6 +575,49 @@ impl TestClient {
             }
             Err(e) => Err(self.parse_error(e.source())),
         }
+    }
+
+    pub async fn distribute(&self, source: &secp256k1::SecretKey, targets: &[(Address, U256)]) -> Result<()> {
+        for target in targets {
+            let (account, amount) = target;
+            let tx_object = TransactionParameters {
+                to: Some(*account),
+                value: *amount,
+                ..Default::default()
+            };
+            let signed = self
+                .accounts
+                .sign_transaction(tx_object, source)
+                .map_err(|e| self.parse_error(e.source()))
+                .await?;
+
+            let hash = self
+                .eth
+                .send_raw_transaction(signed.raw_transaction)
+                .map_err(|e| self.parse_error(e.source()))
+                .await?;
+
+            loop {
+                match self
+                    .eth
+                    .transaction_receipt(hash)
+                    .map_err(|e| self.parse_error(e.source()))
+                    .await?
+                {
+                    Some(receipt) => {
+                        match receipt.status {
+                            Some(r) => {
+                                info!("{account:?} {}", r == U64::one())
+                            }
+                            None => warn!("{account:?} undefined status"),
+                        }
+                        break;
+                    }
+                    None => task::yield_now().await,
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn contract_deploy(&self, deploy_json: DeployJson) -> anyhow::Result<()> {
