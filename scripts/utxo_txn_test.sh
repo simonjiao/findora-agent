@@ -24,6 +24,14 @@ gen_one_key() {
     echo "$pk" "$sk"
 }
 
+gen_one_eth_key() {
+    kp=$(fn gen-eth-key 2>&1 | grep -E "Address|PrivateKey|Mnemonic")
+    pk=$(echo "$kp" | grep "Address" | awk '{print $2}')
+    sk=$(echo "$kp" | grep "PrivateKey" | awk '{print $2}')
+    mn=$(echo "$kp" | grep "Mnemonic" | awk -F':' '{print $2}')
+    echo "$pk,$sk,$mn"
+}
+
 gen_source_keys() {
     count=$1
     if ! mkdir fra_source_keys; then
@@ -107,6 +115,15 @@ show_source_balance() {
     done
 }
 
+run_prism_test() {
+    kp=$(gen_one_eth_key)
+    pk=$(echo "$kp" | awk -F',' '{print $1}')
+    mn=$(echo "$kp" | awk -F',' '{print $3}')
+    fn contract-deposit -a "$pk" -n 10 2>&1
+    sleep 30
+    fn contract-withdraw -a "$pk" -e "$mn" -n 5 2>&1
+}
+
 usage() {
     echo "$0 gen_source_keys COUNT"
     echo "$0 deposit_source_keys AMOUNT"
@@ -130,6 +147,8 @@ elif [ "$cmd" == "gen_target_keys" ]; then
 elif [ "$cmd" == "deposit_source_keys" ]; then
     amount="$(echo "$args" | awk '{print $2}')"
     deposit_source_keys "$amount"
+elif [ "$cmd" == "run_prism_test" ]; then
+    run_prism_test
 elif [ "$cmd" == "run_test" ]; then
     count="$(echo "$args" | awk '{print $2}')"
     run_a_test "$count"
