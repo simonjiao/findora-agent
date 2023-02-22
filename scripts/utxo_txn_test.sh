@@ -7,7 +7,7 @@ cmd="$(echo "$args" | awk '{print $1}')"
 #full01="http://dev-qa01-us-west-2-full-001-open.dev.findora.org"
 #mynode="http://34.211.109.216"
 #endpoint="http://34.211.109.216"
-endpoint="https://dev-qa01.dev.findora.org"
+endpoint="https://dev-qa05.dev.findora.org"
 port=26657
 
 script_dir=$(dirname "$0")
@@ -28,7 +28,7 @@ gen_one_eth_key() {
     kp=$(fn gen-eth-key 2>&1 | grep -E "Address|PrivateKey|Mnemonic")
     pk=$(echo "$kp" | grep "Address" | awk '{print $2}')
     sk=$(echo "$kp" | grep "PrivateKey" | awk '{print $2}')
-    mn=$(echo "$kp" | grep "Mnemonic" | awk -F':' '{print $2}')
+    mn=$(echo "$kp" | grep "Mnemonic" | awk '{print $2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "$10" "$11" "$12" "$13}')
     echo "$pk,$sk,$mn"
 }
 
