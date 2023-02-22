@@ -119,9 +119,10 @@ run_prism_test() {
     kp=$(gen_one_eth_key)
     pk=$(echo "$kp" | awk -F',' '{print $1}')
     mn=$(echo "$kp" | awk -F',' '{print $3}')
+    addr=$(fn show -b 2>/dev/null |grep -A1 "Findora Address:"|tail -1)
     fn contract-deposit -a "$pk" -n 10 2>&1
     sleep 30
-    fn contract-withdraw -a "$pk" -e "$mn" -n 5 2>&1
+    fn contract-withdraw -a "$addr" -e "$mn" -n 5 2>&1
 }
 
 usage() {
