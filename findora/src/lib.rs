@@ -1,5 +1,7 @@
 pub mod error;
 pub mod utils;
+mod utxo;
+
 use crate::{
     error::{Error, InternalError, Result},
     utils::extract_keypair_from_file,
@@ -292,10 +294,10 @@ impl TestClient {
                         Error::TxInternalErr(InternalError::Other(err_str))
                     }
                 } else {
-                    Error::Unknown(err_str)
+                    Error::Other(err_str)
                 }
             }
-            None => Error::Unknown("empty error".to_string()),
+            None => Error::Other("empty error".to_string()),
         }
     }
 
