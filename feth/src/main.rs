@@ -1,25 +1,17 @@
 mod commands;
-mod db;
-mod profiler;
+pub use agent::{db, profiler};
 
-use std::fmt::Formatter;
-use std::ops::Add;
 use std::{
-    collections::BTreeMap,
+    fmt::Formatter,
     ops::{Mul, MulAssign},
     path::PathBuf,
     str::FromStr,
-    sync::{
-        atomic::{AtomicU64, Ordering::Relaxed},
-        mpsc, Arc, Mutex,
-    },
-    time::Duration,
+    sync::{mpsc, Arc},
 };
 
+use agent::{one_eth_key, parse_call_json, parse_deploy_json, parse_query_json, utils::*, TestClient};
 use commands::*;
-use feth::{one_eth_key, parse_call_json, parse_deploy_json, parse_query_json, utils::*, TestClient};
-use log::{debug, error, info};
-use rayon::prelude::*;
+use log::{debug, info};
 use web3::types::{Address, BlockId, BlockNumber, TransactionId, H256, U256, U64};
 
 fn eth_transaction(network: &str, timeout: Option<u64>, hash: H256) {
@@ -173,12 +165,13 @@ fn fund_accounts(
     info!("Balance of {:?}: {}", client.root_addr, balance);
 
     let mut source_keys = if load {
-        let keys: Vec<_> = serde_json::from_str(std::fs::read_to_string("source_keys.001").unwrap().as_str()).unwrap();
+        let keys: Vec<_> =
+            serde_json::from_str(std::fs::read_to_string("../../source_keys.001").unwrap().as_str()).unwrap();
         keys
     } else {
         // check if the key file exists
         debug!("generating new source keys");
-        if std::fs::File::open("source_keys.001").is_ok() {
+        if std::fs::File::open("../../source_keys.001").is_ok() {
             panic!("file \"source_keys.001\" already exists");
         }
         if amount.mul(count + 1) >= balance {
@@ -186,7 +179,7 @@ fn fund_accounts(
         }
         let source_keys = (0..count).map(|_| one_eth_key()).collect::<Vec<_>>();
         let data = serde_json::to_string(&source_keys).unwrap();
-        std::fs::write("source_keys.001", data).unwrap();
+        std::fs::write("../../source_keys.001", data).unwrap();
 
         source_keys
     };
@@ -195,9 +188,9 @@ fn fund_accounts(
     if count as usize > source_keys.len() {
         source_keys.resize_with(count as usize, one_eth_key);
 
-        std::fs::rename("source_keys.001", ".source_keys.001.bak").unwrap();
+        std::fs::rename("../../source_keys.001", ".source_keys.001.bak").unwrap();
         let data = serde_json::to_string(&source_keys).unwrap();
-        std::fs::write("source_keys.001", data).unwrap();
+        std::fs::write("../../source_keys.001", data).unwrap();
     }
 
     let total = source_keys.len();
@@ -324,135 +317,22 @@ fn main() -> anyhow::Result<()> {
             source,
             timeout,
             check_balance,
-            wait_receipt: need_wait_receipt,
-            fetch_block: need_fetch_block,
-        }) => {
-            if mode != &TestMode::Long {
-                return Ok(());
-            }
-            let max_par = *max_threads;
-            let source_file = source;
-            let timeout = Some(*timeout);
-            let count = *count;
-
-            let target_amount = web3::types::U256::exp10(14); // 0.0001 eth
-
-            check_parallel_args(max_par);
-
-            let url = network.get_url();
-            let client = Arc::new(TestClient::setup(Some(url), timeout));
-
-            let (chain_id, gas_price) = display_info(client.clone());
-
-            info!("preparing test data, it could take several minutes...");
-            let source_keys = build_source_keys(
-                client.clone(),
-                source_file,
-                *check_balance,
-                target_amount,
-                *source_count,
+            wait_receipt: _need_wait_receipt,
+            fetch_block: _need_fetch_block,
+        }) => match mode {
+            &TestMode::Long => long_run_test(
+                network,
+                max_threads,
+                source,
+                timeout,
                 count,
-                max_par,
-            );
-            if count == 0 || source_keys.is_empty() {
-                error!("Not enough sufficient source accounts or target accounts, skipped.");
-                return Ok(());
-            }
-
-            let total_succeed = AtomicU64::new(0);
-            let last_batch = Arc::new(Mutex::new(BTreeMap::<secp256k1::SecretKey, (H256, u64)>::new()));
-            let concurrences = source_keys.len();
-
-            // one-thread per source key
-            info!("starting tests...");
-            let start_height = client.block_number().unwrap();
-            let mut last_height = start_height;
-            let total = source_keys.len() * count as usize;
-            let now = std::time::Instant::now();
-            let id = BlockId::Number(BlockNumber::Number(start_height));
-            let mut fetched = client
-                .block_with_tx_hashes(id)
-                .map(|b| BlockInfo {
-                    number: b.number.unwrap().as_u64(),
-                    timestamp: b.timestamp,
-                    count: b.transactions.len(),
-                    block_time: 0u64,
-                })
-                .unwrap();
-            for round in 0..u64::MAX {
-                loop {
-                    let current = client.block_number().unwrap();
-
-                    if *need_fetch_block && fetched.number != current.as_u64() {
-                        let id = BlockId::Number(BlockNumber::Number(current));
-                        let bi = client.block_with_tx_hashes(id).map(|b| BlockInfo {
-                            number: b.number.unwrap().as_u64(),
-                            timestamp: b.timestamp,
-                            count: b.transactions.len(),
-                            block_time: (b.timestamp - fetched.timestamp).as_u64(),
-                        });
-                        info!("BlockInfo {}", bi.as_ref().unwrap());
-                        fetched = bi.unwrap();
-                    }
-
-                    if current >= last_height.add(U64::from(*delay_in_blocks)) {
-                        last_height = current;
-                        break;
-                    } else {
-                        std::thread::sleep(Duration::from_millis(1000));
-                    }
-                }
-                let now = std::time::Instant::now();
-                source_keys.par_iter().for_each(|(source, address, targets)| {
-                    let last_batch = last_batch.clone();
-                    let next = {
-                        if *need_wait_receipt {
-                            let batch = last_batch.lock().unwrap();
-                            let hash: Option<(H256, u64)> = batch.get(source).map(|(h, r)| (*h, *r));
-                            drop(batch);
-
-                            if let Some((hash, r)) = hash {
-                                if wait_receipt(client.clone(), hash) {
-                                    Some(r + 1)
-                                } else {
-                                    None
-                                }
-                            } else {
-                                Some(0)
-                            }
-                        } else {
-                            None
-                        }
-                    };
-                    let r = next.unwrap_or(round);
-                    let target = targets.get((r % count) as usize).unwrap();
-                    if let Some(nonce) = client.pending_nonce(*address) {
-                        if let Ok(hash) =
-                            client.distribution_simple(source, target, Some(chain_id), Some(gas_price), Some(nonce))
-                        {
-                            if *need_wait_receipt {
-                                let mut batch_guard = last_batch.lock().unwrap();
-                                batch_guard.insert(*source, (hash, r));
-                            }
-                            total_succeed.fetch_add(1, Relaxed);
-                        }
-                    }
-                });
-
-                let elapsed = now.elapsed().as_secs();
-                info!("round {} time {}", round, elapsed);
-            }
-
-            let elapsed = now.elapsed().as_secs();
-            let end_height = client.block_number().unwrap();
-
-            let avg = total as f64 / elapsed as f64;
-            info!(
-                "Test result summary: total,{:?}/{},concurrency,{},TPS,{:.3},seconds,{},height,{},{}",
-                total_succeed, total, concurrences, avg, elapsed, start_height, end_height,
-            );
-            Ok(())
-        }
+                check_balance,
+                source_count,
+                delay_in_blocks,
+            ),
+            _ => panic!("unsupported test mode"),
+        },
+        Some(Commands::Prism { .. }) => Ok(()),
         None => Ok(()),
     }
 }

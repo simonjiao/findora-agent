@@ -1,4 +1,4 @@
-use feth::error::Result;
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]

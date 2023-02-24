@@ -1,14 +1,14 @@
 mod long_run;
-
-pub use long_run::*;
-
-use crate::{
+use agent::{
     db::{Db, Proto},
+    error::Result,
     profiler,
+    utxo::PrismOp,
+    BLOCK_TIME,
 };
 use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
-use feth::{error::Result, BLOCK_TIME};
+pub use long_run::*;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
@@ -475,6 +475,7 @@ pub enum Commands {
         #[clap(long)]
         timeout: Option<u64>,
     },
+
     /// Test
     Test {
         /// Ethereum web3-compatible network
@@ -520,5 +521,15 @@ pub enum Commands {
         /// if need to fetch block info
         #[clap(long)]
         fetch_block: bool,
+    },
+
+    Prism {
+        /// network info
+        #[clap(long)]
+        network: Network,
+
+        /// operation
+        #[clap(long)]
+        op: PrismOp,
     },
 }

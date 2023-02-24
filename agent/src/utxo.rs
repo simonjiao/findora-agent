@@ -1,3 +1,5 @@
+pub use prism::*;
+
 mod utils {
     use crate::{Error, Result};
     use finutils::{common::utils, wallet, zei};
@@ -72,6 +74,7 @@ mod prism {
     };
 
     enum Keypair {
+        #[allow(unused)]
         Ed25519(XfrKeyPair),
         Ecdsa(SecpPair),
     }
@@ -85,7 +88,7 @@ mod prism {
         }
     }
 
-    pub(crate) fn deposit<P>(src_mn: P, target_addr: &str, amount: u64) -> Result<()>
+    pub fn deposit<P>(src_mn: P, target_addr: &str, amount: u64) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -116,7 +119,7 @@ mod prism {
         utils::send_tx(&tx).map_err(|o| Error::Prism(o.to_string()))
     }
 
-    pub(crate) fn withdraw<P>(src_eth_mn: P, target_pk: XfrPublicKey, amount: u64) -> Result<()>
+    pub fn withdraw<P>(src_eth_mn: P, target_pk: XfrPublicKey, amount: u64) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -168,5 +171,23 @@ mod prism {
             .map_err(|o| Error::Prism(o.to_string()))?;
 
         Ok(())
+    }
+
+    #[derive(Debug)]
+    pub enum PrismOp {
+        Deposit,
+        WithDraw,
+    }
+
+    impl std::str::FromStr for PrismOp {
+        type Err = String;
+
+        fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+            match s.to_lowercase().trim() {
+                "deposit" => Ok(Self::Deposit),
+                "withdraw" => Ok(Self::WithDraw),
+                n => Err(format!("invalid PrismOp {n}")),
+            }
+        }
     }
 }

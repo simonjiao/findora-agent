@@ -1,5 +1,5 @@
+use crate::error::{Error, Result};
 use derive_more::Display;
-use feth::error::{Error, Result};
 use redis::Client;
 
 #[derive(Debug, Display)]
