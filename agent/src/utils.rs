@@ -77,6 +77,7 @@ pub fn calc_pool_size(keys: usize, max_par: usize) -> usize {
     max_pool_size
 }
 
+#[allow(clippy::type_complexity)]
 pub fn build_source_keys<P>(
     client: Arc<TestClient>,
     source_file: P,

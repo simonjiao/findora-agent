@@ -49,9 +49,11 @@ pub fn fund_accounts(
     if count as usize > source_keys.len() {
         source_keys.resize_with(count as usize, one_eth_key);
 
-        std::fs::rename(source_keys_file, source_keys_file_bak).unwrap();
         let data = serde_json::to_string(&source_keys).unwrap();
-        std::fs::write(source_keys_file, data).unwrap();
+        std::fs::write(source_keys_file_bak, data).unwrap();
+
+        // replace original file
+        std::fs::rename(source_keys_file_bak, source_keys_file).unwrap();
     }
 
     let total = source_keys.len();

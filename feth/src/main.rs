@@ -161,7 +161,7 @@ fn main() -> anyhow::Result<()> {
             seq,
         }) => {
             fund_accounts(
-                network.get_url().as_str(),
+                network.eth_url().as_str(),
                 *timeout,
                 *block_time,
                 *count,
@@ -177,11 +177,11 @@ fn main() -> anyhow::Result<()> {
             timeout,
             account,
         }) => {
-            eth_account(network.get_url().as_str(), *timeout, *account);
+            eth_account(network.eth_url().as_str(), *timeout, *account);
             Ok(())
         }
         Some(Commands::Transaction { network, timeout, hash }) => {
-            eth_transaction(network.get_url().as_str(), *timeout, *hash);
+            eth_transaction(network.eth_url().as_str(), *timeout, *hash);
             Ok(())
         }
         Some(Commands::Block {
@@ -191,7 +191,7 @@ fn main() -> anyhow::Result<()> {
             count,
             follow,
         }) => {
-            eth_blocks(network.get_url().as_str(), *timeout, *start, *count, *follow);
+            eth_blocks(network.eth_url().as_str(), *timeout, *start, *count, *follow);
             Ok(())
         }
         Some(Commands::Etl {
@@ -213,7 +213,7 @@ fn main() -> anyhow::Result<()> {
             config,
             timeout,
         }) => {
-            let rpc_url = network.get_url();
+            let rpc_url = network.eth_url();
             eth_contract(&rpc_url, *timeout, optype, config)?;
             Ok(())
         }
@@ -242,7 +242,16 @@ fn main() -> anyhow::Result<()> {
             ),
             _ => panic!("unsupported test mode"),
         },
-        Some(Commands::Prism { .. }) => Ok(()),
+        Some(Commands::Prism {
+            network,
+            op,
+            secret,
+            target,
+            amount,
+        }) => {
+            execute_prism(network, op, secret, target, amount).expect("failed to execute prism");
+            Ok(())
+        }
         None => Ok(()),
     }
 }

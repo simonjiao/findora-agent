@@ -1,8 +1,8 @@
 mod fund;
 mod long_run;
+mod prism;
 
-pub use fund::*;
-pub use long_run::*;
+pub use {fund::*, long_run::*, prism::*};
 
 use agent::{
     db::{Db, Proto},
@@ -61,14 +61,25 @@ pub enum ContractOP {
     Query,
 }
 
-const LOCAL_URL: &str = "http://localhost:8545";
-const ANVIL_URL: &str = "https://prod-testnet.prod.findora.org:8545";
-const MAIN_URL: &str = "https://prod-mainnet.prod.findora.org:8545";
-const ARCHIVE_URL: &str = "https://archive.prod.findora.org:8545";
-const MY_TEST_URL: &str = "http://34.211.109.216:8545";
+const LOCAL_URL: &str = "http://localhost";
+const ANVIL_URL: &str = "https://prod-testnet.prod.findora.org";
+const MAIN_URL: &str = "https://prod-mainnet.prod.findora.org";
+const ARCHIVE_URL: &str = "https://archive.prod.findora.org";
+const MY_TEST_URL: &str = "http://34.211.109.216";
 
 impl Network {
-    pub fn get_url(&self) -> String {
+    pub fn eth_url(&self) -> String {
+        match self {
+            Network::Node(url) => url.to_owned(),
+            _ => {
+                let mut base = self.base_url();
+                base.push_str(":8545");
+                base
+            }
+        }
+    }
+
+    pub fn base_url(&self) -> String {
         match self {
             Network::Local => LOCAL_URL.to_owned(),
             Network::Anvil => ANVIL_URL.to_owned(),
@@ -77,9 +88,9 @@ impl Network {
             Network::Archive => ARCHIVE_URL.to_owned(),
             Network::Qa(cluster, node) => {
                 if let Some(node) = node {
-                    format!("http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org:8545")
+                    format!("http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org")
                 } else {
-                    format!("https://dev-qa{cluster:0>2}.dev.findora.org:8545")
+                    format!("https://dev-qa{cluster:0>2}.dev.findora.org")
                 }
             }
             Network::Node(url) => url.to_owned(),
@@ -536,5 +547,17 @@ pub enum Commands {
         /// operation
         #[clap(long)]
         op: PrismOp,
+
+        /// source file with secret information
+        #[clap(long, parse(from_os_str))]
+        secret: PathBuf,
+
+        /// target address to receive tokens
+        #[clap(long)]
+        target: String,
+
+        /// amount to deposit or withdraw
+        #[clap(long)]
+        amount: u64,
     },
 }

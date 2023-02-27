@@ -37,7 +37,7 @@ where
 
     let target_amount = web3::types::U256::exp10(14); // 0.0001 eth
 
-    let url = network.get_url();
+    let url = network.eth_url();
     let client = Arc::new(TestClient::setup(Some(url), timeout));
 
     let (chain_id, gas_price) = display_info(client.clone());
