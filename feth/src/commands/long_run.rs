@@ -16,6 +16,7 @@ use std::{
 };
 use web3::types::U64;
 
+#[allow(clippy::too_many_arguments)]
 pub fn long_run_test<P>(
     network: &Network,
     max_threads: &u64,
