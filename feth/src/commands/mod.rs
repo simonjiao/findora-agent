@@ -1,4 +1,9 @@
+mod fund;
 mod long_run;
+
+pub use fund::*;
+pub use long_run::*;
+
 use agent::{
     db::{Db, Proto},
     error::Result,
@@ -8,7 +13,6 @@ use agent::{
 };
 use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
-pub use long_run::*;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
