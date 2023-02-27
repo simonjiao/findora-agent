@@ -13,9 +13,9 @@ use bip0039::{Count, Language, Mnemonic};
 use bip32::{DerivationPath, XPrv};
 use lazy_static::lazy_static;
 use libsecp256k1::{PublicKey, SecretKey};
-use log::{debug, error, info, warn};
 use reqwest::{Client, Url};
 use secp256k1::SecretKey as SecretKey2;
+use tracing::{debug, error, info, warn};
 
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
@@ -531,7 +531,7 @@ impl TestClient {
                     }
                 }
             }
-            log::info!(
+            info!(
                 "{}/{} {:?} {:?} {}",
                 idx,
                 total,
@@ -662,7 +662,7 @@ impl TestClient {
 
             let (success_task, total_times) = multi_tasks_impl(vf).await?;
 
-            log::info!(
+            info!(
                 "success task: {} total times: {} average time: {}",
                 success_task,
                 total_times,
@@ -709,11 +709,11 @@ impl TestClient {
                     .await
                     {
                         Ok(v) => {
-                            log::info!("transaction hash: {:?}", v);
+                            info!("transaction hash: {:?}", v);
                             true
                         }
                         Err(e) => {
-                            log::info!("call contract failed: {:?}", e);
+                            info!("call contract failed: {:?}", e);
                             false
                         }
                     };
@@ -728,7 +728,7 @@ impl TestClient {
 
             let (success_task, total_times) = multi_tasks_impl(vf).await?;
 
-            log::info!(
+            info!(
                 "success task: {} total times: {} average time: {}",
                 success_task,
                 total_times,
@@ -758,7 +758,7 @@ impl TestClient {
             let eth = (*self.eth.clone()).clone();
             let result = contract_query(eth, &contract_addr, &abi_path, &func_name, args).await?;
 
-            log::info!("query result: {:?}", result);
+            info!("query result: {:?}", result);
 
             anyhow::Ok(())
         })?;

@@ -16,6 +16,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
+use tracing::info;
 use web3::types::{Address, H256};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -294,7 +295,7 @@ impl Cli {
     where
         P: AsRef<Path> + std::fmt::Debug,
     {
-        log::info!("{:?} {:?} {} {}", abcid, tendermint, redis, load);
+        info!("{:?} {:?} {} {}", abcid, tendermint, redis, load);
 
         let proto = if &redis[..4] == "unix" { Proto::Unix } else { Proto::Url };
         let db = Rc::new(Db::new(Some(proto), None, redis, Some(6379), Some(0))?);
@@ -326,7 +327,7 @@ impl Cli {
                     }
                     _ => (0i64, 0f64),
                 };
-                log::info!("{},{},{},{},{:.3}", bi.height, bi.txs, bi.valid_txs, block_time, tps,);
+                info!("{},{},{},{},{:.3}", bi.height, bi.txs, bi.valid_txs, block_time, tps,);
             }
         }
         Ok(())

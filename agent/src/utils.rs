@@ -1,9 +1,9 @@
 use crate::{one_eth_key, KeyPair, TestClient};
-use log::{debug, info};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::time::Duration;
 use std::{ops::Mul, path::Path, str::FromStr, sync::Arc};
+use tracing::{debug, info};
 use url::Url;
 use web3::types::{Address, H256, U256};
 

@@ -11,7 +11,7 @@ use std::{
 
 use agent::{one_eth_key, parse_call_json, parse_deploy_json, parse_query_json, utils::*, TestClient};
 use commands::*;
-use log::{debug, info};
+use tracing::{debug, info};
 use web3::types::{Address, BlockId, BlockNumber, TransactionId, H256, U256, U64};
 
 fn eth_transaction(network: &str, timeout: Option<u64>, hash: H256) {
@@ -19,7 +19,7 @@ fn eth_transaction(network: &str, timeout: Option<u64>, hash: H256) {
     // use first endpoint to fund accounts
     let client = TestClient::setup(network[0].clone(), timeout);
     let tx = client.transaction(TransactionId::from(hash));
-    log::info!("{:?}", tx);
+    info!("{:?}", tx);
 }
 
 fn eth_account(network: &str, timeout: Option<u64>, account: Address) {
@@ -28,7 +28,7 @@ fn eth_account(network: &str, timeout: Option<u64>, account: Address) {
     let client = TestClient::setup(network[0].clone(), timeout);
     let balance = client.balance(account, None);
     let nonce = client.nonce(account, None);
-    log::info!("{:?}: {} {:?}", account, balance, nonce);
+    info!("{:?}: {} {:?}", account, balance, nonce);
 }
 fn eth_contract(network: &str, timeout: Option<u64>, optype: &ContractOP, config: &PathBuf) -> anyhow::Result<()> {
     let network = real_network(network);
@@ -210,7 +210,7 @@ fn fund_accounts(
                 Some((from, amount))
             };
             if let Some(a) = account.as_ref() {
-                log::info!("{}/{} {:?}", idx + 1, total, a);
+                info!("{}/{} {:?}", idx + 1, total, a);
             }
             account
         })
@@ -233,7 +233,7 @@ fn fund_accounts(
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt().init();
 
     let cli = Cli::parse_args();
     info!("{:?}", cli);

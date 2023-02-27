@@ -3,7 +3,6 @@ use agent::{
     utils::{build_source_keys, display_info},
     TestClient,
 };
-use log::{error, info};
 use rayon::prelude::*;
 use std::{
     ops::Add,
@@ -14,6 +13,7 @@ use std::{
     },
     time::Duration,
 };
+use tracing::{error, info};
 use web3::types::U64;
 
 #[allow(clippy::too_many_arguments)]
