@@ -1,9 +1,9 @@
 mod fund;
-mod long_run;
 mod native;
 mod prism;
+mod tests;
 
-pub use {fund::*, long_run::*, native::*, prism::*};
+pub use {fund::*, native::*, prism::*, tests::*};
 
 use agent::{
     db::{Db, Proto},

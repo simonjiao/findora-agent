@@ -1,5 +1,6 @@
-use super::Network;
+use crate::Network;
 use agent::{
+    error::Result,
     utils::{build_source_keys, display_info},
     TestClient,
 };
@@ -26,7 +27,7 @@ pub fn long_run_test<P>(
     check_balance: &bool,
     source_count: &Option<u64>,
     delay: &u64,
-) -> anyhow::Result<()>
+) -> Result<()>
 where
     P: AsRef<Path>,
 {

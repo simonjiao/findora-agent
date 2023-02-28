@@ -229,19 +229,37 @@ fn main() -> anyhow::Result<()> {
             check_balance,
             wait_receipt: _need_wait_receipt,
             fetch_block: _need_fetch_block,
-        }) => match mode {
-            &TestMode::Long => long_run_test(
-                network,
-                max_threads,
-                source,
-                timeout,
-                count,
-                check_balance,
-                source_count,
-                delay_in_blocks,
-            ),
-            _ => panic!("unsupported test mode"),
-        },
+        }) => {
+            match *mode {
+                TestMode::Long => {
+                    long_run_test(
+                        network,
+                        max_threads,
+                        source,
+                        timeout,
+                        count,
+                        check_balance,
+                        source_count,
+                        delay_in_blocks,
+                    )
+                    .expect("failed to run long-mode-test");
+                }
+                TestMode::Basic => {
+                    basic_test(
+                        network,
+                        *delay_in_blocks,
+                        *max_threads,
+                        *count,
+                        source,
+                        Some(*timeout),
+                        false,
+                    )
+                    .expect("failed to run basic-mode-test");
+                }
+                _ => panic!("unsupported test mode"),
+            }
+            Ok(())
+        }
         Some(Commands::Prism {
             network,
             op,
