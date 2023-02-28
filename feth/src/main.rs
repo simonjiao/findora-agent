@@ -152,6 +152,7 @@ fn main() -> anyhow::Result<()> {
     match &cli.command {
         Some(Commands::Fund {
             network,
+            source,
             timeout,
             block_time,
             count,
@@ -162,6 +163,7 @@ fn main() -> anyhow::Result<()> {
         }) => {
             fund_accounts(
                 network.eth_url().as_str(),
+                source,
                 *timeout,
                 *block_time,
                 *count,

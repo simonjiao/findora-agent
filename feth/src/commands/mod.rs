@@ -362,6 +362,10 @@ pub enum Commands {
         #[clap(long)]
         network: Network,
 
+        /// source keys' file
+        #[clap(long, parse(from_os_str), value_name = "FILE", default_value = "source_keys.001")]
+        source: PathBuf,
+
         /// http request timeout, seconds
         #[clap(long)]
         timeout: Option<u64>,
