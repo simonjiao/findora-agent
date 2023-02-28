@@ -1,5 +1,9 @@
+pub mod db;
 pub mod error;
+pub mod native;
+pub mod profiler;
 pub mod utils;
+
 use crate::{
     error::{Error, InternalError, Result},
     utils::extract_keypair_from_file,
@@ -9,9 +13,9 @@ use bip0039::{Count, Language, Mnemonic};
 use bip32::{DerivationPath, XPrv};
 use lazy_static::lazy_static;
 use libsecp256k1::{PublicKey, SecretKey};
-use log::{debug, error, info, warn};
 use reqwest::{Client, Url};
 use secp256k1::SecretKey as SecretKey2;
+use tracing::{debug, error, info, warn};
 
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
@@ -31,13 +35,17 @@ use std::{
     time::Duration,
 };
 
-use tokio::{runtime::Runtime, sync::mpsc::Receiver, sync::Mutex, task};
-use web3::futures::TryFutureExt;
+use tokio::{
+    runtime::Runtime,
+    sync::{mpsc::Receiver, Mutex},
+    task,
+};
 use web3::{
     self,
     api::Eth,
     contract::{tokens::Tokenizable, Contract, Options},
     ethabi::{Int, Token, Uint},
+    futures::TryFutureExt,
     transports::Http,
     types::{
         Address, Block, BlockId, BlockNumber, Bytes, Transaction, TransactionId, TransactionParameters,
@@ -292,10 +300,10 @@ impl TestClient {
                         Error::TxInternalErr(InternalError::Other(err_str))
                     }
                 } else {
-                    Error::Unknown(err_str)
+                    Error::Other(err_str)
                 }
             }
-            None => Error::Unknown("empty error".to_string()),
+            None => Error::Other("empty error".to_string()),
         }
     }
 
@@ -527,7 +535,7 @@ impl TestClient {
                     }
                 }
             }
-            log::info!(
+            info!(
                 "{}/{} {:?} {:?} {}",
                 idx,
                 total,
@@ -658,7 +666,7 @@ impl TestClient {
 
             let (success_task, total_times) = multi_tasks_impl(vf).await?;
 
-            log::info!(
+            info!(
                 "success task: {} total times: {} average time: {}",
                 success_task,
                 total_times,
@@ -705,11 +713,11 @@ impl TestClient {
                     .await
                     {
                         Ok(v) => {
-                            log::info!("transaction hash: {:?}", v);
+                            info!("transaction hash: {:?}", v);
                             true
                         }
                         Err(e) => {
-                            log::info!("call contract failed: {:?}", e);
+                            info!("call contract failed: {:?}", e);
                             false
                         }
                     };
@@ -724,7 +732,7 @@ impl TestClient {
 
             let (success_task, total_times) = multi_tasks_impl(vf).await?;
 
-            log::info!(
+            info!(
                 "success task: {} total times: {} average time: {}",
                 success_task,
                 total_times,
@@ -754,7 +762,7 @@ impl TestClient {
             let eth = (*self.eth.clone()).clone();
             let result = contract_query(eth, &contract_addr, &abi_path, &func_name, args).await?;
 
-            log::info!("query result: {:?}", result);
+            info!("query result: {:?}", result);
 
             anyhow::Ok(())
         })?;

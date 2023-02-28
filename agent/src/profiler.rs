@@ -1,5 +1,6 @@
-use feth::error::Result;
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
+use tracing::{error, info};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Configuration {
@@ -28,9 +29,9 @@ pub fn set_profiler(endpoint: &str, status: bool) -> Result<()> {
     let client = reqwest::blocking::Client::new();
     let res = client.post(endpoint).json(&data).send().unwrap();
     if res.status().is_success() {
-        log::info!("{:?}", res.text().ok());
+        info!("{:?}", res.text().ok());
     } else {
-        log::error!("{:?}", res.status())
+        error!("{:?}", res.status())
     }
 
     Ok(())

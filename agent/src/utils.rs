@@ -1,9 +1,8 @@
 use crate::{one_eth_key, KeyPair, TestClient};
-use log::{debug, info};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
-use std::time::Duration;
-use std::{ops::Mul, path::Path, str::FromStr, sync::Arc};
+use std::{ops::Mul, path::Path, str::FromStr, sync::Arc, time::Duration};
+use tracing::{debug, info};
 use url::Url;
 use web3::types::{Address, H256, U256};
 
@@ -77,6 +76,7 @@ pub fn calc_pool_size(keys: usize, max_par: usize) -> usize {
     max_pool_size
 }
 
+#[allow(clippy::type_complexity)]
 pub fn build_source_keys<P>(
     client: Arc<TestClient>,
     source_file: P,

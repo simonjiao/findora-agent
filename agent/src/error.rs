@@ -11,7 +11,9 @@ pub enum Error {
     Io(std::io::Error),
     Db(redis::RedisError),
     NotSupport(String),
-    Unknown(String),
+    Prism(String),
+    Native(String),
+    Other(String),
 }
 
 #[derive(Debug)]
@@ -30,7 +32,9 @@ impl std::fmt::Display for Error {
             Error::Io(e) => write!(f, "Io error {e:?}"),
             Error::Db(e) => write!(f, "Database error {e:?}"),
             Error::NotSupport(e) => write!(f, "Not support: {e}"),
-            Error::Unknown(e) => write!(f, "a unknown error happened: {e}"),
+            Error::Prism(e) => write!(f, "prism error:: {e}"),
+            Error::Native(e) => write!(f, "native error:: {e}"),
+            Error::Other(e) => write!(f, "unknown error happened: {e}"),
         }
     }
 }

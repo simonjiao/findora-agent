@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "findora",
+    "agent",
+    "feth"
 ]
 
 [profile.release]

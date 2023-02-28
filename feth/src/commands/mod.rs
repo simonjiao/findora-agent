@@ -1,14 +1,21 @@
-mod long_run;
+mod fund;
+mod native;
+mod prism;
+mod tests;
 
-pub use long_run::*;
+pub use fund::*;
+pub use native::*;
+pub use prism::*;
+pub use tests::*;
 
-use crate::{
+use agent::{
     db::{Db, Proto},
+    error::Result,
+    native::{NativeOp, PrismOp},
     profiler,
 };
 use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
-use feth::{error::Result, BLOCK_TIME};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
@@ -16,6 +23,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
+use tracing::info;
 use web3::types::{Address, H256};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -56,14 +64,25 @@ pub enum ContractOP {
     Query,
 }
 
-const LOCAL_URL: &str = "http://localhost:8545";
-const ANVIL_URL: &str = "https://prod-testnet.prod.findora.org:8545";
-const MAIN_URL: &str = "https://prod-mainnet.prod.findora.org:8545";
-const ARCHIVE_URL: &str = "https://archive.prod.findora.org:8545";
-const MY_TEST_URL: &str = "http://34.211.109.216:8545";
+const LOCAL_URL: &str = "http://localhost";
+const ANVIL_URL: &str = "https://prod-testnet.prod.findora.org";
+const MAIN_URL: &str = "https://prod-mainnet.prod.findora.org";
+const ARCHIVE_URL: &str = "https://archive.prod.findora.org";
+const MY_TEST_URL: &str = "http://34.211.109.216";
 
 impl Network {
-    pub fn get_url(&self) -> String {
+    pub fn eth_url(&self) -> String {
+        match self {
+            Network::Node(url) => url.to_owned(),
+            _ => {
+                let mut base = self.base_url();
+                base.push_str(":8545");
+                base
+            }
+        }
+    }
+
+    pub fn base_url(&self) -> String {
         match self {
             Network::Local => LOCAL_URL.to_owned(),
             Network::Anvil => ANVIL_URL.to_owned(),
@@ -72,9 +91,9 @@ impl Network {
             Network::Archive => ARCHIVE_URL.to_owned(),
             Network::Qa(cluster, node) => {
                 if let Some(node) = node {
-                    format!("http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org:8545")
+                    format!("http://dev-qa{cluster:0>2}-us-west-2-full-{node:0>3}-open.dev.findora.org")
                 } else {
-                    format!("https://dev-qa{cluster:0>2}.dev.findora.org:8545")
+                    format!("https://dev-qa{cluster:0>2}.dev.findora.org")
                 }
             }
             Network::Node(url) => url.to_owned(),
@@ -294,7 +313,7 @@ impl Cli {
     where
         P: AsRef<Path> + std::fmt::Debug,
     {
-        log::info!("{:?} {:?} {} {}", abcid, tendermint, redis, load);
+        info!("{:?} {:?} {} {}", abcid, tendermint, redis, load);
 
         let proto = if &redis[..4] == "unix" { Proto::Unix } else { Proto::Url };
         let db = Rc::new(Db::new(Some(proto), None, redis, Some(6379), Some(0))?);
@@ -326,7 +345,7 @@ impl Cli {
                     }
                     _ => (0i64, 0f64),
                 };
-                log::info!("{},{},{},{},{:.3}", bi.height, bi.txs, bi.valid_txs, block_time, tps,);
+                info!("{},{},{},{},{:.3}", bi.height, bi.txs, bi.valid_txs, block_time, tps,);
             }
         }
         Ok(())
@@ -342,29 +361,29 @@ impl Cli {
 pub enum Commands {
     /// Fund Ethereum accounts
     Fund {
-        /// ethereum-compatible network
+        /// Findora or Ethereum-compatible network
         #[clap(long)]
         network: Network,
 
-        /// http request timeout, seconds
-        #[clap(long)]
-        timeout: Option<u64>,
+        /// source keys' file
+        #[clap(long, parse(from_os_str), value_name = "FILE", default_value = "source_keys.001")]
+        source: PathBuf,
 
-        /// block time of the network
-        #[clap(long, default_value_t = BLOCK_TIME)]
-        block_time: u64,
-
-        /// the number of Eth Account to be fund
+        /// the number of Eth/Fra Account to be fund
         #[clap(long, default_value_t = 0)]
         count: u64,
 
-        /// how much 0.1-eth to fund
+        /// how much tokens to fund: 0.1-eth or 0.001-fra
         #[clap(long, default_value_t = 1)]
         amount: u64,
 
         /// load keys from file
         #[clap(long)]
         load: bool,
+
+        /// native account, default to eth account
+        #[clap(long)]
+        native: bool,
 
         /// re-deposit account with insufficient balance
         #[clap(long)]
@@ -475,6 +494,7 @@ pub enum Commands {
         #[clap(long)]
         timeout: Option<u64>,
     },
+
     /// Test
     Test {
         /// Ethereum web3-compatible network
@@ -520,5 +540,49 @@ pub enum Commands {
         /// if need to fetch block info
         #[clap(long)]
         fetch_block: bool,
+    },
+
+    Prism {
+        /// network info
+        #[clap(long)]
+        network: Network,
+
+        /// operation
+        #[clap(long)]
+        op: PrismOp,
+
+        /// source file with secret information
+        #[clap(long, parse(from_os_str))]
+        secret: PathBuf,
+
+        /// target address to receive tokens
+        #[clap(long)]
+        target: String,
+
+        /// amount to deposit or withdraw
+        #[clap(long)]
+        amount: u64,
+    },
+
+    Native {
+        /// network info
+        #[clap(long)]
+        network: Network,
+
+        /// native operation
+        #[clap(long)]
+        op: NativeOp,
+
+        /// source file with secret information
+        #[clap(long, parse(from_os_str))]
+        secret: PathBuf,
+
+        /// target address to receive tokens
+        #[clap(long)]
+        target: String,
+
+        /// amount to deposit or withdraw
+        #[clap(long)]
+        amount: u64,
     },
 }
