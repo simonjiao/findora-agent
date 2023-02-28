@@ -9,7 +9,7 @@ use agent::{
     db::{Db, Proto},
     error::Result,
     native::{NativeOp, PrismOp},
-    profiler, BLOCK_TIME,
+    profiler,
 };
 use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
@@ -358,7 +358,7 @@ impl Cli {
 pub enum Commands {
     /// Fund Ethereum accounts
     Fund {
-        /// ethereum-compatible network
+        /// Findora or Ethereum-compatible network
         #[clap(long)]
         network: Network,
 
@@ -366,25 +366,21 @@ pub enum Commands {
         #[clap(long, parse(from_os_str), value_name = "FILE", default_value = "source_keys.001")]
         source: PathBuf,
 
-        /// http request timeout, seconds
-        #[clap(long)]
-        timeout: Option<u64>,
-
-        /// block time of the network
-        #[clap(long, default_value_t = BLOCK_TIME)]
-        block_time: u64,
-
-        /// the number of Eth Account to be fund
+        /// the number of Eth/Fra Account to be fund
         #[clap(long, default_value_t = 0)]
         count: u64,
 
-        /// how much 0.1-eth to fund
+        /// how much tokens to fund: 0.1-eth or 0.001-fra
         #[clap(long, default_value_t = 1)]
         amount: u64,
 
         /// load keys from file
         #[clap(long)]
         load: bool,
+
+        /// native account, default to eth account
+        #[clap(long)]
+        native: bool,
 
         /// re-deposit account with insufficient balance
         #[clap(long)]

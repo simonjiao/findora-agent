@@ -153,25 +153,26 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Fund {
             network,
             source,
-            timeout,
-            block_time,
             count,
             amount,
             load,
+            native,
             redeposit,
             seq,
         }) => {
-            fund_accounts(
-                network.eth_url().as_str(),
-                source,
-                *timeout,
-                *block_time,
-                *count,
-                *amount,
-                *load,
-                *redeposit,
-                *seq,
-            );
+            if !native {
+                fund_accounts(
+                    network.eth_url().as_str(),
+                    source,
+                    *count,
+                    *amount,
+                    *load,
+                    *redeposit,
+                    *seq,
+                );
+            } else {
+                todo!()
+            }
             Ok(())
         }
         Some(Commands::Info {

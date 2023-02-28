@@ -1,4 +1,4 @@
-use agent::{one_eth_key, utils::real_network, TestClient};
+use agent::{one_eth_key, TestClient, BLOCK_TIME};
 use std::ops::{Mul, MulAssign};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -9,8 +9,6 @@ use web3::types::Address;
 pub fn fund_accounts(
     network: &str,
     source_keys_file: &PathBuf,
-    timeout: Option<u64>,
-    block_time: u64,
     count: u64,
     am: u64,
     load: bool,
@@ -20,9 +18,7 @@ pub fn fund_accounts(
     let mut amount = web3::types::U256::exp10(17); // 0.1 eth
     amount.mul_assign(am);
 
-    let network = real_network(network);
-    // use first endpoint to fund accounts
-    let client = TestClient::setup(network[0].clone(), timeout);
+    let client = TestClient::setup(Some(network.to_string()), None);
     let balance = client.balance(client.root_addr, None);
     info!("Balance of {:?}: {}", client.root_addr, balance);
 
@@ -89,7 +85,7 @@ pub fn fund_accounts(
             .unwrap();
     } else {
         let _metrics = client
-            .distribution(1, None, &source_accounts, &Some(block_time), true, true)
+            .distribution(1, None, &source_accounts, &Some(BLOCK_TIME), true, true)
             .unwrap();
     }
 }
