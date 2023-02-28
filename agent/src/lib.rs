@@ -35,13 +35,17 @@ use std::{
     time::Duration,
 };
 
-use tokio::{runtime::Runtime, sync::mpsc::Receiver, sync::Mutex, task};
-use web3::futures::TryFutureExt;
+use tokio::{
+    runtime::Runtime,
+    sync::{mpsc::Receiver, Mutex},
+    task,
+};
 use web3::{
     self,
     api::Eth,
     contract::{tokens::Tokenizable, Contract, Options},
     ethabi::{Int, Token, Uint},
+    futures::TryFutureExt,
     transports::Http,
     types::{
         Address, Block, BlockId, BlockNumber, Bytes, Transaction, TransactionId, TransactionParameters,

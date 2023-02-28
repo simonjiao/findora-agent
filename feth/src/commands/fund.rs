@@ -1,7 +1,9 @@
 use agent::{one_eth_key, TestClient, BLOCK_TIME};
-use std::ops::{Mul, MulAssign};
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{
+    ops::{Mul, MulAssign},
+    path::PathBuf,
+    str::FromStr,
+};
 use tracing::{debug, info};
 use web3::types::Address;
 

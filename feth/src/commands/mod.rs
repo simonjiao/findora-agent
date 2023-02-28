@@ -3,7 +3,10 @@ mod native;
 mod prism;
 mod tests;
 
-pub use {fund::*, native::*, prism::*, tests::*};
+pub use fund::*;
+pub use native::*;
+pub use prism::*;
+pub use tests::*;
 
 use agent::{
     db::{Db, Proto},
