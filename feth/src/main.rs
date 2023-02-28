@@ -252,6 +252,16 @@ fn main() -> anyhow::Result<()> {
             execute_prism(network, op, secret, target, amount).expect("failed to execute prism");
             Ok(())
         }
+        Some(Commands::Native {
+            network,
+            op,
+            secret,
+            target,
+            amount,
+        }) => {
+            execute_native(network, op, secret, target, *amount).expect("failed execute native operation");
+            Ok(())
+        }
         None => Ok(()),
     }
 }

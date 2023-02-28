@@ -1,15 +1,15 @@
 mod fund;
 mod long_run;
+mod native;
 mod prism;
 
-pub use {fund::*, long_run::*, prism::*};
+pub use {fund::*, long_run::*, native::*, prism::*};
 
 use agent::{
     db::{Db, Proto},
     error::Result,
-    profiler,
-    utxo::PrismOp,
-    BLOCK_TIME,
+    native::{NativeOp, PrismOp},
+    profiler, BLOCK_TIME,
 };
 use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
@@ -547,6 +547,28 @@ pub enum Commands {
         /// operation
         #[clap(long)]
         op: PrismOp,
+
+        /// source file with secret information
+        #[clap(long, parse(from_os_str))]
+        secret: PathBuf,
+
+        /// target address to receive tokens
+        #[clap(long)]
+        target: String,
+
+        /// amount to deposit or withdraw
+        #[clap(long)]
+        amount: u64,
+    },
+
+    Native {
+        /// network info
+        #[clap(long)]
+        network: Network,
+
+        /// native operation
+        #[clap(long)]
+        op: NativeOp,
 
         /// source file with secret information
         #[clap(long, parse(from_os_str))]

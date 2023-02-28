@@ -2,8 +2,8 @@ pub use prism::*;
 pub use utils::*;
 
 mod utils {
-    use crate::{Error, Result};
-    use finutils::{common::utils, fp_utils, wallet, zei};
+    pub(crate) use crate::{Error, Result};
+    pub(super) use finutils::{common::utils, fp_utils, wallet, zei};
     use fp_utils::ecdsa::SecpPair;
     use std::{path::Path, str::FromStr};
     use tendermint::block::Height;
@@ -11,7 +11,7 @@ mod utils {
     use tokio::runtime::Runtime;
     pub(super) use utils::{gen_transfer_op, new_tx_builder, send_tx_to};
     use wallet::{public_key_from_base64, restore_keypair_from_mnemonic_default};
-    use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+    pub(super) use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
     pub fn restore_fra_keypair<P>(mn_path: P) -> Result<XfrKeyPair>
     where
@@ -193,4 +193,44 @@ mod prism {
             }
         }
     }
+}
+
+#[derive(Debug)]
+pub enum NativeOp {
+    Transfer,
+    Delegate,
+    Stake,
+}
+
+impl std::str::FromStr for NativeOp {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().trim() {
+            "transfer" => Ok(NativeOp::Transfer),
+            "delegate" => Ok(NativeOp::Delegate),
+            "stake" => Ok(NativeOp::Stake),
+            _ => Err("Unknown NativeOp".to_string()),
+        }
+    }
+}
+
+pub fn transfer(endpoint: &str, src_kp: XfrKeyPair, target_addr: XfrPublicKey, amount: u64) -> Result<()> {
+    let mut builder = new_tx_builder().map_err(|o| Error::Native(o.to_string()))?;
+    let op = gen_transfer_op(
+        &src_kp,
+        vec![(&target_addr, amount)],
+        None, // None for FRA,
+        false,
+        false,
+        None,
+    )
+    .map_err(|o| Error::Native(o.to_string()))?;
+
+    builder.add_operation(op);
+
+    let mut tx = builder.take_transaction();
+    tx.sign_to_map(&src_kp);
+
+    send_tx_to(&tx, Some(endpoint)).map_err(|o| Error::Native(o.to_string()))
 }

@@ -1,8 +1,8 @@
 pub mod db;
 pub mod error;
+pub mod native;
 pub mod profiler;
 pub mod utils;
-pub mod utxo;
 
 use crate::{
     error::{Error, InternalError, Result},

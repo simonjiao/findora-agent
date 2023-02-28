@@ -1,6 +1,6 @@
 use crate::Network;
 use agent::error::{Error, Result};
-use agent::utxo::*;
+use agent::native::*;
 use std::path::PathBuf;
 use web3::types::H160;
 
