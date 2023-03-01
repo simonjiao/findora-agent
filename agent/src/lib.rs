@@ -135,8 +135,32 @@ pub struct NetworkInfo {
     pub frc20_code: Option<Bytes>,
 }
 
+#[derive(Debug)]
+pub struct TestClientOpts {
+    pub endpoint_url: Option<String>,
+    pub secret_file: Option<String>,
+    pub timeout: Option<u64>,
+}
+
 impl TestClient {
     pub fn setup(url: Option<String>, timeout: Option<u64>) -> Self {
+        let opts = TestClientOpts {
+            endpoint_url: url,
+            secret_file: None,
+            timeout,
+        };
+
+        Self::setup_with_opts(opts)
+    }
+
+    pub fn setup_with_opts(opts: TestClientOpts) -> Self {
+        let TestClientOpts {
+            endpoint_url: url,
+            secret_file,
+            timeout,
+        } = opts;
+
+        let secret = secret_file.unwrap_or(".secret".to_owned());
         let client = Client::builder()
             .timeout(Duration::from_secs(timeout.unwrap_or(3)))
             .build()
@@ -146,7 +170,7 @@ impl TestClient {
         let web3 = Arc::new(web3::Web3::new(transport));
         let eth = Arc::new(web3.eth());
         let accounts = Arc::new(web3.accounts());
-        let (root_sk, root_addr) = extract_keypair_from_file(".secret");
+        let (root_sk, root_addr) = extract_keypair_from_file(secret);
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()

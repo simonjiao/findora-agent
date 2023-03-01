@@ -366,8 +366,8 @@ pub enum Commands {
         network: Network,
 
         /// source keys' file
-        #[clap(long, parse(from_os_str), value_name = "FILE", default_value = "source_keys.001")]
-        source: PathBuf,
+        #[clap(long, parse(from_os_str), value_name = "FILE")]
+        source: Option<PathBuf>,
 
         /// the number of Eth/Fra Account to be fund
         #[clap(long, default_value_t = 0)]
@@ -381,9 +381,9 @@ pub enum Commands {
         #[clap(long)]
         load: bool,
 
-        /// native account, default to eth account
+        /// utxo account, default to eth account
         #[clap(long)]
-        native: bool,
+        utxo: bool,
 
         /// re-deposit account with insufficient balance
         #[clap(long)]
