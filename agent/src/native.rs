@@ -10,8 +10,18 @@ mod utils {
     use tendermint_rpc::{endpoint::abci_query::AbciQuery, Client, HttpClient};
     use tokio::runtime::Runtime;
     pub(super) use utils::{gen_transfer_op, new_tx_builder, send_tx_to};
-    use wallet::{public_key_from_base64, restore_keypair_from_mnemonic_default};
+    pub use wallet::{public_key_from_base64, restore_keypair_from_mnemonic_default};
     pub(super) use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+
+    /// fra 24, en
+    pub fn generate_mnemonic(count: usize, wordslen: u8, lang: &str) -> Result<Vec<String>> {
+        let mut mns = Vec::with_capacity(count);
+        while mns.len() < count {
+            let mnemonic = wallet::generate_mnemonic_custom(wordslen, lang).map_err(|o| Error::Other(o.to_string()))?;
+            mns.push(mnemonic);
+        }
+        Ok(mns)
+    }
 
     pub fn restore_fra_keypair<P>(mn_path: P) -> Result<XfrKeyPair>
     where
@@ -216,10 +226,14 @@ impl std::str::FromStr for NativeOp {
 }
 
 pub fn transfer(endpoint: &str, src_kp: XfrKeyPair, target_addr: XfrPublicKey, amount: u64) -> Result<()> {
+    transfer_batch(endpoint, src_kp, vec![(&target_addr, amount)])
+}
+
+pub fn transfer_batch(endpoint: &str, src_kp: XfrKeyPair, target_list: Vec<(&XfrPublicKey, u64)>) -> Result<()> {
     let mut builder = new_tx_builder().map_err(|o| Error::Native(o.to_string()))?;
     let op = gen_transfer_op(
         &src_kp,
-        vec![(&target_addr, amount)],
+        target_list,
         None, // None for FRA,
         false,
         false,

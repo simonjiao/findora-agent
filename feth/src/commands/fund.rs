@@ -1,36 +1,126 @@
-use agent::{one_eth_key, TestClient, BLOCK_TIME};
+use agent::{
+    error::{Error, Result},
+    native::{generate_mnemonic, restore_fra_keypair, restore_keypair_from_mnemonic_default, transfer_batch},
+    one_eth_key, TestClient, TestClientOpts, BLOCK_TIME,
+};
 use std::{
     ops::{Mul, MulAssign},
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
 };
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tracing::{debug, info};
 use web3::types::Address;
+
+const UTXO_SECRET: &str = ".utxo.mn.secret";
+const ETH_SECRET: &str = ".secret";
+const UTXO_SOURCE_FILE: &str = "utxo_source_keys.001";
+const ETH_SOURCE_FILE: &str = "source_keys.001";
+
+async fn read_mnemonics<P>(secret: P, mut mnemonics: Vec<String>) -> Result<Vec<String>>
+where
+    P: AsRef<Path>,
+{
+    let file = tokio::fs::OpenOptions::new().read(true).open(secret).await?;
+    let mut lines = tokio::io::BufReader::new(file).lines();
+    while let Some(line) = lines.next_line().await? {
+        mnemonics.push(line)
+    }
+
+    Ok(mnemonics)
+}
+
+async fn write_mnemonics<P>(secret: P, mnemonics: Vec<String>) -> Result<Vec<String>>
+where
+    P: AsRef<Path>,
+{
+    let file = tokio::fs::OpenOptions::new().write(true).open(secret).await?;
+    file.set_len(0).await?;
+    let mut buffer = tokio::io::BufWriter::new(file);
+    for mn in &mnemonics {
+        buffer.write_all(mn.as_bytes()).await?;
+        buffer.write_all(b"\n").await?;
+    }
+    buffer.flush().await?;
+
+    Ok(mnemonics)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn fund_utxo_accounts(
+    network: &str,
+    source_keys_file: Option<PathBuf>,
+    count: u64,
+    amount: u64,
+    load: bool,
+) -> Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    let source_keys_file = source_keys_file.unwrap_or(PathBuf::from_str(UTXO_SOURCE_FILE).unwrap());
+    let owner_kp = restore_fra_keypair(UTXO_SECRET)?;
+    let mnemonics = if load {
+        let mut mnemonics = runtime.block_on(async { read_mnemonics(&source_keys_file, vec![]).await })?;
+        if count as usize > mnemonics.len() {
+            mnemonics.append(&mut generate_mnemonic(count as usize - mnemonics.len(), 24, "en")?);
+            //write new keys back
+            runtime.block_on(async { write_mnemonics(&source_keys_file, mnemonics).await })?
+        } else {
+            mnemonics
+        }
+    } else {
+        if source_keys_file.exists() {
+            return Err(Error::Other("source keys file already existed".to_string()));
+        }
+        let mn = generate_mnemonic(count as usize, 24, "en")?;
+        //write new keys back
+        runtime.block_on(async { write_mnemonics(&source_keys_file, mn.clone()).await })?
+    };
+
+    let mut kps = vec![];
+    for mn in mnemonics {
+        let kp = restore_keypair_from_mnemonic_default(mn.trim()).map_err(|o| Error::Other(o.to_string()))?;
+        kps.push(kp);
+    }
+    let target_list = kps.iter().map(|p| (&p.pub_key, amount)).collect::<Vec<_>>();
+
+    transfer_batch(network, owner_kp, target_list)?;
+
+    Ok(())
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn fund_accounts(
     network: &str,
-    source_keys_file: &PathBuf,
+    source_keys_file: Option<PathBuf>,
     count: u64,
     am: u64,
     load: bool,
     redeposit: bool,
     seq: bool,
 ) {
+    let source_keys_file = source_keys_file.unwrap_or(PathBuf::from_str(ETH_SOURCE_FILE).unwrap());
     let mut amount = web3::types::U256::exp10(17); // 0.1 eth
     amount.mul_assign(am);
 
-    let client = TestClient::setup(Some(network.to_string()), None);
+    let opts = TestClientOpts {
+        endpoint_url: Some(network.to_string()),
+        secret_file: Some(ETH_SECRET.to_owned()),
+        timeout: None,
+    };
+    let client = TestClient::setup_with_opts(opts);
     let balance = client.balance(client.root_addr, None);
     info!("Balance of {:?}: {}", client.root_addr, balance);
 
     let mut source_keys = if load {
-        let keys: Vec<_> = serde_json::from_str(std::fs::read_to_string(source_keys_file).unwrap().as_str()).unwrap();
+        let keys: Vec<_> = serde_json::from_str(std::fs::read_to_string(&source_keys_file).unwrap().as_str()).unwrap();
         keys
     } else {
         // check if the key file exists
         debug!("generating new source keys");
-        if std::fs::File::open(source_keys_file).is_ok() {
+        if std::fs::File::open(&source_keys_file).is_ok() {
             panic!("file \"{:?}\" already exists", source_keys_file.to_str());
         }
         if amount.mul(count + 1) >= balance {
@@ -38,7 +128,7 @@ pub fn fund_accounts(
         }
         let source_keys = (0..count).map(|_| one_eth_key()).collect::<Vec<_>>();
         let data = serde_json::to_string(&source_keys).unwrap();
-        std::fs::write(source_keys_file, data).unwrap();
+        std::fs::write(&source_keys_file, data).unwrap();
 
         source_keys
     };

@@ -156,14 +156,14 @@ fn main() -> anyhow::Result<()> {
             count,
             amount,
             load,
-            native,
+            utxo,
             redeposit,
             seq,
         }) => {
-            if !native {
+            if !*utxo {
                 fund_accounts(
                     network.eth_url().as_str(),
-                    source,
+                    source.clone(),
                     *count,
                     *amount,
                     *load,
@@ -171,7 +171,7 @@ fn main() -> anyhow::Result<()> {
                     *seq,
                 );
             } else {
-                todo!()
+                fund_utxo_accounts(network.base_url().as_str(), source.clone(), *count, *amount, *load)?;
             }
             Ok(())
         }
