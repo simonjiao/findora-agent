@@ -223,6 +223,7 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Test {
             network,
             mode,
+            txns_type,
             delay: delay_in_blocks,
             max_threads,
             count,
@@ -250,6 +251,7 @@ fn main() -> anyhow::Result<()> {
                 TestMode::Basic => {
                     basic_test(
                         network,
+                        txns_type,
                         *delay_in_blocks,
                         *max_threads,
                         *count,

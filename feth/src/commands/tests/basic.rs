@@ -1,5 +1,9 @@
-use crate::commands::Network;
-use agent::{error::Result, one_eth_key, TestClient};
+use crate::commands::{common::read_mnemonics, Network, TxnsType};
+use agent::{
+    error::{Error, Result},
+    native::{gen_one_mnemonic_default, restore_keypair_from_mnemonic_default, transfer, TX_FEE_MIN},
+    one_eth_key, TestClient,
+};
 use rayon::prelude::*;
 use std::{
     ops::Mul,
@@ -11,6 +15,7 @@ use std::{
     },
     time::Duration,
 };
+use tendermint_rpc::Client;
 use tracing::{debug, error, info};
 use web3::types::{Address, U256};
 
@@ -24,6 +29,91 @@ fn calc_pool_size(keys: usize, max_threads: usize) -> usize {
 
 #[allow(clippy::too_many_arguments)]
 pub fn basic_test(
+    network: &Network,
+    txns_type: &TxnsType,
+    delay: u64,
+    max_par: u64,
+    count: u64,
+    source_file: &PathBuf,
+    timeout: Option<u64>,
+    check_balance: bool,
+) -> Result<()> {
+    match *txns_type {
+        TxnsType::Eth => basic_eth_test(network, delay, max_par, count, source_file, timeout, check_balance),
+        TxnsType::Utxo => basic_utxo_test(network, max_par, count, source_file),
+        _ => {
+            todo!();
+        }
+    }
+}
+
+fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file: &PathBuf) -> Result<()> {
+    // 1. load accounts from source_file
+    // 2. generate `count` targets per source  account
+    // 3. send them in parallel
+    // 4. wait for a block and send again
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .build()
+        .unwrap();
+
+    let source_kps = runtime
+        .block_on(async { read_mnemonics(source_file, vec![]).await })?
+        .par_iter()
+        .filter_map(|o| restore_keypair_from_mnemonic_default(o).ok())
+        .collect::<Vec<_>>();
+    info!("{} source keys for testing", source_kps.len());
+
+    let targets = (0..count as usize * source_kps.len())
+        .into_par_iter()
+        .filter_map(|_| {
+            gen_one_mnemonic_default()
+                .ok()
+                .and_then(|o| restore_keypair_from_mnemonic_default(o.as_str()).ok())
+                .map(|o| o.pub_key)
+        })
+        .collect::<Vec<_>>();
+
+    if targets.len() != count as usize * source_kps.len() {
+        return Err(Error::Other("Not enough targets generated".to_owned()));
+    }
+
+    let base = network.base_url();
+    let tm_client = tendermint_rpc::HttpClient::new(format!("{base}:26657").as_str()).unwrap();
+    let mut last = runtime
+        .block_on(async { tm_client.latest_block().await })
+        .map_err(|o| Error::Native(o.to_string()))?
+        .block
+        .header
+        .height;
+
+    for chunk in targets.chunks(count as usize) {
+        source_kps
+            .par_iter()
+            .zip(chunk)
+            .for_each(|(kp, target)| transfer(base.as_str(), kp.clone(), *target, TX_FEE_MIN).unwrap());
+
+        loop {
+            let current = runtime
+                .block_on(async { tm_client.latest_block().await })
+                .map_err(|o| Error::Native(o.to_string()))?
+                .block
+                .header
+                .height;
+            if current > last {
+                last = current;
+                break;
+            } else {
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn basic_eth_test(
     network: &Network,
     delay: u64,
     max_par: u64,
