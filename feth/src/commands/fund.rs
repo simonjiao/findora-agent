@@ -34,8 +34,11 @@ async fn write_mnemonics<P>(secret: P, mnemonics: Vec<String>) -> Result<Vec<Str
 where
     P: AsRef<Path>,
 {
-    let file = tokio::fs::OpenOptions::new().write(true).open(secret).await?;
-    file.set_len(0).await?;
+    let file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(secret)
+        .await?;
     let mut buffer = tokio::io::BufWriter::new(file);
     for mn in &mnemonics {
         buffer.write_all(mn.as_bytes()).await?;
@@ -78,6 +81,7 @@ pub fn fund_utxo_accounts(
         //write new keys back
         runtime.block_on(async { write_mnemonics(&source_keys_file, mn.clone()).await })?
     };
+    info!("{} accounts loaded to be fund", mnemonics.len());
 
     let mut kps = vec![];
     for mn in mnemonics {

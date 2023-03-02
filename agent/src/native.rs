@@ -9,7 +9,7 @@ mod utils {
     use tendermint::block::Height;
     use tendermint_rpc::{endpoint::abci_query::AbciQuery, Client, HttpClient};
     use tokio::runtime::Runtime;
-    pub(super) use utils::{gen_transfer_op, new_tx_builder, send_tx_to};
+    pub(super) use utils::{gen_transfer_op_xx, new_tx_builder_to, send_tx_to};
     pub use wallet::{public_key_from_base64, restore_keypair_from_mnemonic_default};
     pub(super) use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
@@ -114,12 +114,14 @@ mod prism {
     }
 
     pub fn deposit(endpoint: &str, src_kp: XfrKeyPair, target_addr: H160, amount: u64) -> Result<()> {
-        let mut builder = utils::new_tx_builder().map_err(|o| Error::Prism(o.to_string()))?;
+        let mut builder = utils::new_tx_builder_to(Some(endpoint)).map_err(|o| Error::Prism(o.to_string()))?;
 
-        let transfer_op = utils::gen_transfer_op(
+        let transfer_op = utils::gen_transfer_op_xx(
+            Some(endpoint),
             &src_kp,
             vec![(&BLACK_HOLE_PUBKEY_STAKING, amount)],
             None,
+            true,
             false,
             false,
             Some(AssetRecordType::NonConfidentialAmount_NonConfidentialAssetType),
@@ -230,16 +232,9 @@ pub fn transfer(endpoint: &str, src_kp: XfrKeyPair, target_addr: XfrPublicKey, a
 }
 
 pub fn transfer_batch(endpoint: &str, src_kp: XfrKeyPair, target_list: Vec<(&XfrPublicKey, u64)>) -> Result<()> {
-    let mut builder = new_tx_builder().map_err(|o| Error::Native(o.to_string()))?;
-    let op = gen_transfer_op(
-        &src_kp,
-        target_list,
-        None, // None for FRA,
-        false,
-        false,
-        None,
-    )
-    .map_err(|o| Error::Native(o.to_string()))?;
+    let mut builder = new_tx_builder_to(Some(endpoint)).map_err(|o| Error::Native(o.to_string()))?;
+    let op = gen_transfer_op_xx(Some(endpoint), &src_kp, target_list, None, true, false, false, None)
+        .map_err(|o| Error::Native(o.to_string()))?;
 
     builder.add_operation(op);
 
