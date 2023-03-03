@@ -3,8 +3,10 @@ pub use utils::*;
 
 mod utils {
     pub(crate) use crate::{Error, Result};
+    use finutils::ledger;
     pub(super) use finutils::{common::utils, fp_utils, wallet, zei};
     use fp_utils::ecdsa::SecpPair;
+    pub use ledger::{data_model::TX_FEE_MIN, staking::FRA};
     use std::{path::Path, str::FromStr};
     use tendermint::block::Height;
     use tendermint_rpc::{endpoint::abci_query::AbciQuery, Client, HttpClient};
@@ -21,6 +23,10 @@ mod utils {
             mns.push(mnemonic);
         }
         Ok(mns)
+    }
+
+    pub fn gen_one_mnemonic_default() -> Result<String> {
+        wallet::generate_mnemonic_custom(24, "en").map_err(|o| Error::Other(o.to_string()))
     }
 
     pub fn restore_fra_keypair<P>(mn_path: P) -> Result<XfrKeyPair>

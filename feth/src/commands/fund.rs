@@ -1,53 +1,16 @@
+use super::common::{read_mnemonics, write_mnemonics, ETH_SECRET, ETH_SOURCE_FILE, UTXO_SECRET, UTXO_SOURCE_FILE};
 use agent::{
     error::{Error, Result},
-    native::{generate_mnemonic, restore_fra_keypair, restore_keypair_from_mnemonic_default, transfer_batch},
+    native::{generate_mnemonic, restore_fra_keypair, restore_keypair_from_mnemonic_default, transfer_batch, FRA},
     one_eth_key, TestClient, TestClientOpts, BLOCK_TIME,
 };
 use std::{
     ops::{Mul, MulAssign},
-    path::{Path, PathBuf},
+    path::PathBuf,
     str::FromStr,
 };
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tracing::{debug, info};
 use web3::types::Address;
-
-const UTXO_SECRET: &str = ".utxo.mn.secret";
-const ETH_SECRET: &str = ".secret";
-const UTXO_SOURCE_FILE: &str = "utxo_source_keys.001";
-const ETH_SOURCE_FILE: &str = "source_keys.001";
-
-async fn read_mnemonics<P>(secret: P, mut mnemonics: Vec<String>) -> Result<Vec<String>>
-where
-    P: AsRef<Path>,
-{
-    let file = tokio::fs::OpenOptions::new().read(true).open(secret).await?;
-    let mut lines = tokio::io::BufReader::new(file).lines();
-    while let Some(line) = lines.next_line().await? {
-        mnemonics.push(line)
-    }
-
-    Ok(mnemonics)
-}
-
-async fn write_mnemonics<P>(secret: P, mnemonics: Vec<String>) -> Result<Vec<String>>
-where
-    P: AsRef<Path>,
-{
-    let file = tokio::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(secret)
-        .await?;
-    let mut buffer = tokio::io::BufWriter::new(file);
-    for mn in &mnemonics {
-        buffer.write_all(mn.as_bytes()).await?;
-        buffer.write_all(b"\n").await?;
-    }
-    buffer.flush().await?;
-
-    Ok(mnemonics)
-}
 
 #[allow(clippy::too_many_arguments)]
 pub fn fund_utxo_accounts(
@@ -62,6 +25,7 @@ pub fn fund_utxo_accounts(
         .build()
         .unwrap();
 
+    let amount = amount * FRA;
     let source_keys_file = source_keys_file.unwrap_or(PathBuf::from_str(UTXO_SOURCE_FILE).unwrap());
     let owner_kp = restore_fra_keypair(UTXO_SECRET)?;
     let mnemonics = if load {

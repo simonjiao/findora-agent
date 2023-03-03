@@ -1,3 +1,4 @@
+mod common;
 mod fund;
 mod native;
 mod prism;
@@ -373,7 +374,7 @@ pub enum Commands {
         #[clap(long, default_value_t = 0)]
         count: u64,
 
-        /// how much tokens to fund: 0.1-eth or 0.001-fra
+        /// how much tokens to fund: 0.1-eth or FRA(100*TX_FEE_MIN)
         #[clap(long, default_value_t = 1)]
         amount: u64,
 
@@ -504,6 +505,10 @@ pub enum Commands {
         /// Test mode: basic transfer transaction, contract call transaction
         #[clap(long)]
         mode: TestMode,
+
+        /// TxnsType: 'eth', 'utxo', 'prism', 'mixed,u64,u64,u64'
+        #[clap(long, default_value_t = TxnsType::Eth)]
+        txns_type: TxnsType,
 
         /// Delay in blocks
         #[clap(long, default_value_t = 1)]
