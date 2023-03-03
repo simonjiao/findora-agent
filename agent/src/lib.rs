@@ -82,8 +82,17 @@ pub struct KeyPair {
 
 #[inline(always)]
 pub fn one_eth_key() -> KeyPair {
+    let (_, secret, public) = gen_one_eth_key();
+
+    KeyPair {
+        address: eth_checksum::checksum(&format!("{public:?}")),
+        private: hex::encode(secret.serialize()),
+    }
+}
+
+pub fn gen_one_eth_key() -> (Mnemonic, SecretKey, H160) {
     let mnemonic = Mnemonic::generate_in(Language::English, Count::Words12);
-    let bs = mnemonic.to_seed("");
+    let bs = &mnemonic.to_seed("");
     let ext = XPrv::derive_from_path(bs, &DerivationPath::from_str("m/44'/60'/0'/0/0").unwrap()).unwrap();
 
     let secret = SecretKey::parse_slice(&ext.to_bytes()).unwrap();
@@ -93,10 +102,7 @@ pub fn one_eth_key() -> KeyPair {
     res.copy_from_slice(&public.serialize()[1..65]);
     let public = H160::from(H256::from_slice(Keccak256::digest(res).as_slice()));
 
-    KeyPair {
-        address: eth_checksum::checksum(&format!("{public:?}")),
-        private: hex::encode(secret.serialize()),
-    }
+    (mnemonic, secret, public)
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]

@@ -13,7 +13,7 @@ mod utils {
     use tokio::runtime::Runtime;
     pub(super) use utils::{gen_transfer_op_xx, new_tx_builder_to, send_tx_to};
     pub use wallet::{public_key_from_base64, restore_keypair_from_mnemonic_default};
-    pub(super) use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
+    pub use zei::xfr::sig::{XfrKeyPair, XfrPublicKey};
 
     /// fra 24, en
     pub fn generate_mnemonic(count: usize, wordslen: u8, lang: &str) -> Result<Vec<String>> {
@@ -95,7 +95,8 @@ mod prism {
         transaction::UncheckedTransaction,
         H160, U256,
     };
-    use fp_utils::{ecdsa::SecpPair, tx::EvmRawTxWrapper};
+    pub use fp_utils::ecdsa::SecpPair;
+    use fp_utils::tx::EvmRawTxWrapper;
     use ledger::data_model::{ASSET_TYPE_FRA, BLACK_HOLE_PUBKEY_STAKING};
     use tendermint_rpc::Client;
     use tokio::runtime::Runtime;
