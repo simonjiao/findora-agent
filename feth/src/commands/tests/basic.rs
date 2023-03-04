@@ -1,7 +1,11 @@
 use crate::commands::{common::read_mnemonics, Network, TxnsType};
 use agent::{
     error::{Error, Result},
-    native::{gen_one_mnemonic_default, restore_keypair_from_mnemonic_default, transfer, TX_FEE_MIN},
+    gen_one_eth_key,
+    native::{
+        deposit, gen_one_mnemonic_default, restore_keypair_from_mnemonic_default, transfer, withdraw, SecpPair,
+        XfrKeyPair, TX_FEE_MIN,
+    },
     one_eth_key, TestClient,
 };
 use rayon::prelude::*;
@@ -15,7 +19,9 @@ use std::{
     },
     time::Duration,
 };
-use tendermint_rpc::Client;
+use tendermint::block::Height;
+use tendermint_rpc::{Client, HttpClient};
+use tokio::runtime::Runtime;
 use tracing::{debug, error, info};
 use web3::types::{Address, U256};
 
@@ -41,10 +47,92 @@ pub fn basic_test(
     match *txns_type {
         TxnsType::Eth => basic_eth_test(network, delay, max_par, count, source_file, timeout, check_balance),
         TxnsType::Utxo => basic_utxo_test(network, max_par, count, source_file),
-        _ => {
+        TxnsType::Prism => basic_prism_test(network, max_par, count, source_file),
+        TxnsType::Mixed(_x, _y, _z) => {
             todo!();
         }
     }
+}
+
+fn load_source_kps(runtime: &Runtime, source_file: &PathBuf) -> Result<Vec<XfrKeyPair>> {
+    let kps = runtime
+        .block_on(async { read_mnemonics(source_file, vec![]).await })?
+        .par_iter()
+        .filter_map(|o| restore_keypair_from_mnemonic_default(o).ok())
+        .collect::<Vec<_>>();
+
+    Ok(kps)
+}
+
+fn current_tendermint_height(runtime: &Runtime, tm_client: &HttpClient) -> Result<Height> {
+    let current = runtime
+        .block_on(async { tm_client.latest_block().await })
+        .map_err(|o| Error::Native(o.to_string()))?
+        .block
+        .header
+        .height;
+    Ok(current)
+}
+
+fn wait_for_new_block(runtime: &Runtime, tm_client: &HttpClient, last: Height, interval: u64) -> Result<Height> {
+    loop {
+        let current = current_tendermint_height(runtime, tm_client)?;
+        if current > last {
+            break Ok(current);
+        } else {
+            std::thread::sleep(Duration::from_secs(interval));
+        }
+    }
+}
+
+fn basic_prism_test(network: &Network, _max_threads: u64, count: u64, source_file: &PathBuf) -> Result<()> {
+    // 1. load accounts from source_file
+    // 2. generate `count` eth targets per source account
+    // 3. call `deposit` in parallel
+    // 4. write for a block and send more
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .build()
+        .unwrap();
+
+    let source_kps = load_source_kps(&runtime, source_file)?;
+    info!("{} source keys for testing", source_kps.len());
+
+    let targets = (0..count as usize * source_kps.len())
+        .into_par_iter()
+        .filter_map(|_| {
+            let (eth_mn, _, target) = gen_one_eth_key();
+            SecpPair::from_phrase(eth_mn.phrase(), None)
+                .ok()
+                .map(|kp| (kp.0, target))
+        })
+        .collect::<Vec<_>>();
+
+    if targets.len() != count as usize * source_kps.len() {
+        return Err(Error::Other("Not enough targets generated".to_owned()));
+    }
+
+    let base = network.base_url();
+    let tm_client = HttpClient::new(format!("{base}:26657").as_str()).unwrap();
+    let mut last = current_tendermint_height(&runtime, &tm_client)?;
+
+    for chunk in targets.chunks(count as usize) {
+        source_kps
+            .par_iter()
+            .zip(chunk)
+            .for_each(|(kp, (_, target))| deposit(base.as_str(), kp.clone(), *target, 10 * TX_FEE_MIN).unwrap());
+
+        last = wait_for_new_block(&runtime, &tm_client, last, 1u64)?;
+
+        source_kps
+            .par_iter()
+            .zip(chunk)
+            .for_each(|(kp, (eth_kp, _))| withdraw(base.as_str(), *eth_kp, kp.get_pk(), TX_FEE_MIN).unwrap());
+
+        last = wait_for_new_block(&runtime, &tm_client, last, 1u64)?;
+    }
+
+    Ok(())
 }
 
 fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file: &PathBuf) -> Result<()> {
@@ -57,11 +145,7 @@ fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file
         .build()
         .unwrap();
 
-    let source_kps = runtime
-        .block_on(async { read_mnemonics(source_file, vec![]).await })?
-        .par_iter()
-        .filter_map(|o| restore_keypair_from_mnemonic_default(o).ok())
-        .collect::<Vec<_>>();
+    let source_kps = load_source_kps(&runtime, source_file)?;
     info!("{} source keys for testing", source_kps.len());
 
     let targets = (0..count as usize * source_kps.len())
@@ -79,13 +163,8 @@ fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file
     }
 
     let base = network.base_url();
-    let tm_client = tendermint_rpc::HttpClient::new(format!("{base}:26657").as_str()).unwrap();
-    let mut last = runtime
-        .block_on(async { tm_client.latest_block().await })
-        .map_err(|o| Error::Native(o.to_string()))?
-        .block
-        .header
-        .height;
+    let tm_client = HttpClient::new(format!("{base}:26657").as_str()).unwrap();
+    let mut last = current_tendermint_height(&runtime, &tm_client)?;
 
     for chunk in targets.chunks(count as usize) {
         source_kps
@@ -93,20 +172,7 @@ fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file
             .zip(chunk)
             .for_each(|(kp, target)| transfer(base.as_str(), kp.clone(), *target, TX_FEE_MIN).unwrap());
 
-        loop {
-            let current = runtime
-                .block_on(async { tm_client.latest_block().await })
-                .map_err(|o| Error::Native(o.to_string()))?
-                .block
-                .header
-                .height;
-            if current > last {
-                last = current;
-                break;
-            } else {
-                std::thread::sleep(Duration::from_secs(1));
-            }
-        }
+        last = wait_for_new_block(&runtime, &tm_client, last, 1u64)?;
     }
 
     Ok(())
