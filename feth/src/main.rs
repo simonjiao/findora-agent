@@ -155,6 +155,7 @@ fn main() -> anyhow::Result<()> {
             source,
             count,
             amount,
+            delay,
             load,
             utxo,
             redeposit,
@@ -169,6 +170,7 @@ fn main() -> anyhow::Result<()> {
                     *load,
                     *redeposit,
                     *seq,
+                    *delay,
                 );
             } else {
                 fund_utxo_accounts(network.base_url().as_str(), source.clone(), *count, *amount, *load)?;

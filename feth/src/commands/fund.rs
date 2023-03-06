@@ -68,6 +68,7 @@ pub fn fund_accounts(
     load: bool,
     redeposit: bool,
     seq: bool,
+    delay_in_seconds: u64,
 ) {
     let source_keys_file = source_keys_file.unwrap_or(PathBuf::from_str(ETH_SOURCE_FILE).unwrap());
     let mut amount = web3::types::U256::exp10(17); // 0.1 eth
@@ -141,7 +142,7 @@ pub fn fund_accounts(
     if seq {
         client
             .rt
-            .block_on(client.distribute(&client.root_sk, &source_accounts))
+            .block_on(client.distribute(&client.root_sk, &source_accounts, delay_in_seconds))
             .unwrap();
     } else {
         let _metrics = client

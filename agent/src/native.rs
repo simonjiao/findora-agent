@@ -139,7 +139,7 @@ mod prism {
 
         builder
             .add_operation(transfer_op)
-            .add_operation_convert_account(&src_kp, target_address, amount)
+            .add_operation_convert_account(&src_kp, target_address, amount, None, None)
             .map_err(|o| Error::Prism(o.to_string()))?
             .sign(&src_kp);
 
@@ -154,6 +154,8 @@ mod prism {
             target: target_pk,
             amount,
             asset: ASSET_TYPE_FRA,
+            decimal: 6,
+            max_supply: 0,
         };
 
         let signer = Address::from(src_kp.address());

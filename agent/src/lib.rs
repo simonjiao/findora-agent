@@ -615,7 +615,12 @@ impl TestClient {
         }
     }
 
-    pub async fn distribute(&self, source: &secp256k1::SecretKey, targets: &[(Address, U256)]) -> Result<()> {
+    pub async fn distribute(
+        &self,
+        source: &secp256k1::SecretKey,
+        targets: &[(Address, U256)],
+        delay_in_seconds: u64,
+    ) -> Result<()> {
         for target in targets {
             let (account, amount) = target;
             let tx_object = TransactionParameters {
@@ -653,6 +658,7 @@ impl TestClient {
                     }
                     None => task::yield_now().await,
                 }
+                std::thread::sleep(Duration::from_secs(delay_in_seconds));
             }
         }
         Ok(())

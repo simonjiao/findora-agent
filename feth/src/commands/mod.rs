@@ -360,7 +360,7 @@ impl Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Fund Ethereum accounts
+    /// Fund testing accounts, utxo or ethereum
     Fund {
         /// Findora or Ethereum-compatible network
         #[clap(long)]
@@ -377,6 +377,10 @@ pub enum Commands {
         /// how much tokens to fund: 0.1-eth or FRA(100*TX_FEE_MIN)
         #[clap(long, default_value_t = 1)]
         amount: u64,
+
+        /// how many seconds should be wait between fund txns
+        #[clap(long, default_value_t = 0)]
+        delay: u64,
 
         /// load keys from file
         #[clap(long)]
@@ -496,7 +500,7 @@ pub enum Commands {
         timeout: Option<u64>,
     },
 
-    /// Test
+    /// Run some tests
     Test {
         /// Ethereum web3-compatible network
         #[clap(long)]
@@ -547,6 +551,7 @@ pub enum Commands {
         fetch_block: bool,
     },
 
+    /// Findora prism operations
     Prism {
         /// network info
         #[clap(long)]
@@ -569,6 +574,7 @@ pub enum Commands {
         amount: u64,
     },
 
+    /// Findora utxo transactions
     Native {
         /// network info
         #[clap(long)]

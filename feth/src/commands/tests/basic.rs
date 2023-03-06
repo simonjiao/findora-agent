@@ -19,11 +19,12 @@ use std::{
     },
     time::Duration,
 };
-use tendermint::block::Height;
-use tendermint_rpc::{Client, HttpClient};
 use tokio::runtime::Runtime;
 use tracing::{debug, error, info};
-use web3::types::{Address, U256};
+use web3::{
+    transports::Http,
+    types::{Address, U256},
+};
 
 fn calc_pool_size(keys: usize, max_threads: usize) -> usize {
     if keys > max_threads {
@@ -64,19 +65,16 @@ fn load_source_kps(runtime: &Runtime, source_file: &PathBuf) -> Result<Vec<XfrKe
     Ok(kps)
 }
 
-fn current_tendermint_height(runtime: &Runtime, tm_client: &HttpClient) -> Result<Height> {
-    let current = runtime
-        .block_on(async { tm_client.latest_block().await })
-        .map_err(|o| Error::Native(o.to_string()))?
-        .block
-        .header
-        .height;
-    Ok(current)
+fn current_height(runtime: &Runtime, web3_client: &web3::Web3<Http>) -> Result<u64> {
+    runtime
+        .block_on(async { web3_client.eth().block_number().await })
+        .map_err(|o| Error::Native(o.to_string()))
+        .map(|h| h.as_u64())
 }
 
-fn wait_for_new_block(runtime: &Runtime, tm_client: &HttpClient, last: Height, interval: u64) -> Result<Height> {
+fn wait_for_new_block(runtime: &Runtime, web3_client: &web3::Web3<Http>, last: u64, interval: u64) -> Result<u64> {
     loop {
-        let current = current_tendermint_height(runtime, tm_client)?;
+        let current = current_height(runtime, web3_client)?;
         if current > last {
             break Ok(current);
         } else {
@@ -91,7 +89,7 @@ fn basic_prism_test(network: &Network, _max_threads: u64, count: u64, source_fil
     // 3. call `deposit` in parallel
     // 4. write for a block and send more
     let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_io()
+        .enable_all()
         .build()
         .unwrap();
 
@@ -113,23 +111,26 @@ fn basic_prism_test(network: &Network, _max_threads: u64, count: u64, source_fil
     }
 
     let base = network.base_url();
-    let tm_client = HttpClient::new(format!("{base}:26657").as_str()).unwrap();
-    let mut last = current_tendermint_height(&runtime, &tm_client)?;
+    let http_client = Http::new(network.eth_url().as_str()).unwrap();
+    let web3_client = web3::Web3::new(http_client);
+    let mut last = current_height(&runtime, &web3_client)?;
+    info!("testing starts at height {} ->> endpoint {}", last, base);
 
-    for chunk in targets.chunks(count as usize) {
+    for (i, chunk) in targets.chunks(count as usize).enumerate() {
+        info!("sending chunk {}, count {}", i, chunk.len());
         source_kps
             .par_iter()
             .zip(chunk)
             .for_each(|(kp, (_, target))| deposit(base.as_str(), kp.clone(), *target, 10 * TX_FEE_MIN).unwrap());
 
-        last = wait_for_new_block(&runtime, &tm_client, last, 1u64)?;
+        last = wait_for_new_block(&runtime, &web3_client, last, 1u64)?;
 
         source_kps
             .par_iter()
             .zip(chunk)
             .for_each(|(kp, (eth_kp, _))| withdraw(base.as_str(), *eth_kp, kp.get_pk(), TX_FEE_MIN).unwrap());
 
-        last = wait_for_new_block(&runtime, &tm_client, last, 1u64)?;
+        last = wait_for_new_block(&runtime, &web3_client, last, 1u64)?;
     }
 
     Ok(())
@@ -141,7 +142,7 @@ fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file
     // 3. send them in parallel
     // 4. wait for a block and send again
     let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_io()
+        .enable_all()
         .build()
         .unwrap();
 
@@ -163,16 +164,19 @@ fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file
     }
 
     let base = network.base_url();
-    let tm_client = HttpClient::new(format!("{base}:26657").as_str()).unwrap();
-    let mut last = current_tendermint_height(&runtime, &tm_client)?;
+    let http_client = Http::new(network.eth_url().as_str()).unwrap();
+    let web3_client = web3::Web3::new(http_client);
+    let mut last = current_height(&runtime, &web3_client)?;
+    info!("testing starts at height {} ->> endpoint {}", last, base);
 
-    for chunk in targets.chunks(count as usize) {
+    for (i, chunk) in targets.chunks(count as usize).enumerate() {
+        info!("sending chunk {}, count {}", i, chunk.len());
         source_kps
             .par_iter()
             .zip(chunk)
             .for_each(|(kp, target)| transfer(base.as_str(), kp.clone(), *target, TX_FEE_MIN).unwrap());
 
-        last = wait_for_new_block(&runtime, &tm_client, last, 1u64)?;
+        last = wait_for_new_block(&runtime, &web3_client, last, 1u64)?;
     }
 
     Ok(())
