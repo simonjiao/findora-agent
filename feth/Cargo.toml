@@ -8,8 +8,6 @@ edition = "2021"
 [dependencies]
 agent = { path = "../agent" }
 web3 = { git = "https://github.com/simonjiao/rust-web3.git", branch = "findora" }
-#tendermint-rpc = { version = "0.23.0", features = ["http-client", "websocket-client"] }
-#tendermint = { version = "0.23.0"  }
 chrono = "0.4.19"
 clap = {version = "3.1", features = [ "derive" ]}
 tracing = "0.1.37"
