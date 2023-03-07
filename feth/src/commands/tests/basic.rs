@@ -19,7 +19,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::runtime::Runtime;
+use tokio::{runtime::Runtime, task::yield_now};
 use tracing::{debug, error, info};
 use web3::{
     transports::Http,
@@ -72,13 +72,13 @@ fn current_height(runtime: &Runtime, web3_client: &web3::Web3<Http>) -> Result<u
         .map(|h| h.as_u64())
 }
 
-fn wait_for_new_block(runtime: &Runtime, web3_client: &web3::Web3<Http>, last: u64, interval: u64) -> Result<u64> {
+async fn wait_for_new_block(web3_client: &web3::Web3<Http>, last: u64) -> Result<u64> {
     loop {
-        let current = current_height(runtime, web3_client)?;
-        if current > last {
-            break Ok(current);
+        let current = web3_client.eth().block_number().await.unwrap().as_u64();
+        if current <= last {
+            yield_now().await;
         } else {
-            std::thread::sleep(Duration::from_secs(interval));
+            break (Ok(current));
         }
     }
 }
@@ -95,20 +95,23 @@ fn basic_prism_test(network: &Network, _max_threads: u64, count: u64, source_fil
 
     let source_kps = load_source_kps(&runtime, source_file)?;
     info!("{} source keys for testing", source_kps.len());
+    let source_cnt = source_kps.len();
 
-    let targets = (0..count as usize * source_kps.len())
-        .into_par_iter()
-        .filter_map(|_| {
-            let (eth_mn, _, target) = gen_one_eth_key();
-            SecpPair::from_phrase(eth_mn.phrase(), None)
-                .ok()
-                .map(|kp| (kp.0, target))
-        })
-        .collect::<Vec<_>>();
+    let (tx, mut rx) = tokio::sync::mpsc::channel(count as usize);
 
-    if targets.len() != count as usize * source_kps.len() {
-        return Err(Error::Other("Not enough targets generated".to_owned()));
-    }
+    runtime.spawn(async move {
+        for _ in 0..count {
+            let chunk = (0..source_cnt)
+                .filter_map(|_| {
+                    let (eth_mn, _, target) = gen_one_eth_key();
+                    SecpPair::from_phrase(eth_mn.phrase(), None)
+                        .ok()
+                        .map(|kp| (kp.0, target))
+                })
+                .collect::<Vec<_>>();
+            tx.send(chunk).await.unwrap();
+        }
+    });
 
     let base = network.base_url();
     let http_client = Http::new(network.eth_url().as_str()).unwrap();
@@ -116,22 +119,24 @@ fn basic_prism_test(network: &Network, _max_threads: u64, count: u64, source_fil
     let mut last = current_height(&runtime, &web3_client)?;
     info!("testing starts at height {} ->> endpoint {}", last, base);
 
-    for (i, chunk) in targets.chunks(count as usize).enumerate() {
-        info!("sending chunk {}, count {}", i, chunk.len());
-        source_kps
-            .par_iter()
-            .zip(chunk)
-            .for_each(|(kp, (_, target))| deposit(base.as_str(), kp.clone(), *target, 10 * TX_FEE_MIN).unwrap());
+    runtime.spawn(async move {
+        while let Some(chunk) = rx.recv().await {
+            info!("chunk count {}", chunk.len());
+            source_kps
+                .par_iter()
+                .zip(&chunk)
+                .for_each(|(kp, (_, target))| deposit(base.as_str(), kp.clone(), *target, 10 * TX_FEE_MIN).unwrap());
 
-        last = wait_for_new_block(&runtime, &web3_client, last, 1u64)?;
+            last = wait_for_new_block(&web3_client, last).await.unwrap();
 
-        source_kps
-            .par_iter()
-            .zip(chunk)
-            .for_each(|(kp, (eth_kp, _))| withdraw(base.as_str(), *eth_kp, kp.get_pk(), TX_FEE_MIN).unwrap());
+            source_kps
+                .par_iter()
+                .zip(chunk)
+                .for_each(|(kp, (eth_kp, _))| withdraw(base.as_str(), eth_kp, kp.get_pk(), TX_FEE_MIN).unwrap());
 
-        last = wait_for_new_block(&runtime, &web3_client, last, 1u64)?;
-    }
+            last = wait_for_new_block(&web3_client, last).await.unwrap();
+        }
+    });
 
     Ok(())
 }
@@ -148,20 +153,23 @@ fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file
 
     let source_kps = load_source_kps(&runtime, source_file)?;
     info!("{} source keys for testing", source_kps.len());
+    let source_cnt = source_kps.len();
 
-    let targets = (0..count as usize * source_kps.len())
-        .into_par_iter()
-        .filter_map(|_| {
-            gen_one_mnemonic_default()
-                .ok()
-                .and_then(|o| restore_keypair_from_mnemonic_default(o.as_str()).ok())
+    let (tx, mut rx) = tokio::sync::mpsc::channel(count as usize);
+
+    runtime.spawn(async move {
+        for _ in 0..count {
+            let chunk = (0..source_cnt)
+                .filter_map(|_| {
+                    gen_one_mnemonic_default()
+                        .ok()
+                        .and_then(|o| restore_keypair_from_mnemonic_default(o.as_str()).ok())
+                })
                 .map(|o| o.pub_key)
-        })
-        .collect::<Vec<_>>();
-
-    if targets.len() != count as usize * source_kps.len() {
-        return Err(Error::Other("Not enough targets generated".to_owned()));
-    }
+                .collect::<Vec<_>>();
+            tx.send(chunk).await.unwrap()
+        }
+    });
 
     let base = network.base_url();
     let http_client = Http::new(network.eth_url().as_str()).unwrap();
@@ -169,15 +177,16 @@ fn basic_utxo_test(network: &Network, _max_threads: u64, count: u64, source_file
     let mut last = current_height(&runtime, &web3_client)?;
     info!("testing starts at height {} ->> endpoint {}", last, base);
 
-    for (i, chunk) in targets.chunks(count as usize).enumerate() {
-        info!("sending chunk {}, count {}", i, chunk.len());
-        source_kps
-            .par_iter()
-            .zip(chunk)
-            .for_each(|(kp, target)| transfer(base.as_str(), kp.clone(), *target, TX_FEE_MIN).unwrap());
+    runtime.spawn(async move {
+        while let Some(chunk) = rx.recv().await {
+            source_kps
+                .par_iter()
+                .zip(chunk)
+                .for_each(|(kp, target)| transfer(base.as_str(), kp.clone(), target, TX_FEE_MIN).unwrap());
 
-        last = wait_for_new_block(&runtime, &web3_client, last, 1u64)?;
-    }
+            last = wait_for_new_block(&web3_client, last).await.unwrap();
+        }
+    });
 
     Ok(())
 }
