@@ -77,7 +77,7 @@ pub fn fund_accounts(
     let opts = TestClientOpts {
         endpoint_url: Some(network.to_string()),
         secret_file: Some(ETH_SECRET.to_owned()),
-        timeout: None,
+        timeout: Some(20),
     };
     let client = TestClient::setup_with_opts(opts);
     let balance = client.balance(client.root_addr, None);

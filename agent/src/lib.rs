@@ -628,25 +628,46 @@ impl TestClient {
                 value: *amount,
                 ..Default::default()
             };
-            let signed = self
+            let signed = match self
                 .accounts
                 .sign_transaction(tx_object, source)
-                .map_err(|e| self.parse_error(e.source()))
-                .await?;
+                .map_err(|e| Error::Other(e.to_string()))
+                .await
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    error!("{:?}: {:?}", account, e);
+                    continue;
+                }
+            };
 
-            let hash = self
+            let hash = match self
                 .eth
                 .send_raw_transaction(signed.raw_transaction)
-                .map_err(|e| self.parse_error(e.source()))
-                .await?;
+                .map_err(|e| Error::Other(e.to_string()))
+                .await
+            {
+                Ok(h) => h,
+                Err(e) => {
+                    error!("{:?}: {:?}", account, e);
+                    continue;
+                }
+            };
 
             loop {
-                match self
+                let receipt = match self
                     .eth
                     .transaction_receipt(hash)
                     .map_err(|e| self.parse_error(e.source()))
-                    .await?
+                    .await
                 {
+                    Ok(r) => r,
+                    Err(e) => {
+                        error!("{:?}: {:?}", account, e);
+                        break;
+                    }
+                };
+                match receipt {
                     Some(receipt) => {
                         match receipt.status {
                             Some(r) => {
@@ -658,8 +679,8 @@ impl TestClient {
                     }
                     None => task::yield_now().await,
                 }
-                std::thread::sleep(Duration::from_secs(delay_in_seconds));
             }
+            std::thread::sleep(Duration::from_secs(delay_in_seconds));
         }
         Ok(())
     }
