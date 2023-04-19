@@ -55,14 +55,16 @@ struct BlockInfo {
     timestamp: U256,
     count: usize,
     block_time: u64,
+    transactions: Vec<H256>,
+    transactions_root: H256,
 }
 
 impl std::fmt::Display for BlockInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{},{},{},{}",
-            self.number, self.timestamp, self.count, self.block_time
+            "\n{},{},{},{},{:?}\n{:?}",
+            self.number, self.timestamp, self.count, self.block_time, self.transactions_root, self.transactions
         )
     }
 }
@@ -81,6 +83,8 @@ fn para_eth_blocks(client: Arc<TestClient>, start: u64, end: u64) {
                 timestamp: b.timestamp,
                 count: b.transactions.len(),
                 block_time: 0u64,
+                transactions: b.transactions,
+                transactions_root: b.transactions_root,
             });
             tx.send((n, b)).unwrap();
         })
@@ -118,6 +122,8 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
                 timestamp: b.timestamp,
                 count: b.transactions.len(),
                 block_time: 0u64,
+                transactions: b.transactions,
+                transactions_root: b.transactions_root,
             })
             .unwrap()
     };
@@ -132,12 +138,11 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
                 timestamp: b.timestamp,
                 count: b.transactions.len(),
                 block_time: (b.timestamp - fetched.timestamp).as_u64(),
+                transactions: b.transactions,
+                transactions_root: b.transactions_root,
             })
             .unwrap();
-        info!(
-            "{},{},{},{}",
-            current.number, current.timestamp, current.count, current.block_time,
-        );
+        info!("block info => {current}");
         fetched = current;
     }
 }
