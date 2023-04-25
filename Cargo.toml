@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "agent",
-    "feth"
+    "feth",
+    "profiler"
 ]
 
 [profile.release]
