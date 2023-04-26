@@ -1,9 +1,8 @@
 use parking_lot::Mutex;
-use std::{fs, path::Path};
+use std::{cmp::Ordering, fs, path::Path};
 
 const MAX_USERS: u8 = 127u8;
-static PROFILER_GUARD: Mutex<Option<(pprof::ProfilerGuard<'static>, u8)>> =
-    Mutex::new(None);
+static PROFILER_GUARD: Mutex<Option<(pprof::ProfilerGuard<'static>, u8)>> = Mutex::new(None);
 
 pub fn start_profiler() -> bool {
     let mut guard = PROFILER_GUARD.lock();
@@ -33,14 +32,26 @@ where
 
 pub fn stop_profiler() {
     let mut guard = PROFILER_GUARD.lock();
-    if let Some(g) = guard.as_mut() {
-        if g.1 == 1 {
-            // drop the profiler
-            *guard = None;
-        } else if g.1 > 1 {
-            g.1 -= 1;
-        } else {
-            panic!("impossible");
+    let need_to_drop = if let Some(g) = guard.as_mut() {
+        match g.1.cmp(&1) {
+            Ordering::Less => {
+                panic!("impossible")
+            }
+            Ordering::Equal => {
+                // need to drop the profiler
+                true
+            }
+            Ordering::Greater => {
+                g.1 -= 1;
+                return;
+            }
         }
+    } else {
+        // nothing to do
+        return;
+    };
+
+    if need_to_drop {
+        *guard = None;
     }
 }

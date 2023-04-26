@@ -449,6 +449,10 @@ pub enum Commands {
         /// follow the newest blocks
         #[clap(short, long)]
         follow: bool,
+
+        /// check duplicate tx for some blocks
+        #[clap(long, default_value_t = 0)]
+        checktx: u64,
     },
 
     /// ETL procession

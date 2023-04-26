@@ -2,6 +2,7 @@ mod commands;
 pub use agent::{db, profiler};
 
 use std::{
+    collections::{HashSet, VecDeque},
     fmt::Formatter,
     path::PathBuf,
     sync::{mpsc, Arc},
@@ -103,19 +104,38 @@ fn para_eth_blocks(client: Arc<TestClient>, start: u64, end: u64) {
     })
 }
 
-fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u64, follow: bool) {
+fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u64, follow: bool, check_tx: u64) {
+    let mut txs_map = VecDeque::new();
     let client = TestClient::setup(Some(network.to_string()), timeout);
     let start = start.unwrap_or_else(|| client.block_number().unwrap().as_u64());
     if !follow && count == 0 {
         panic!("Need a non-zero block count for a non-follow mode");
     }
+
+    let mut build_txs_map = |txs: &[H256]| {
+        if check_tx == 0 {
+            return;
+        }
+        assert!(txs
+            .iter()
+            .all(|tx| { txs_map.iter().all(|set: &HashSet<H256>| !set.contains(tx)) }));
+
+        if txs_map.len() >= check_tx as usize {
+            txs_map.pop_front();
+        }
+        let len = txs.len();
+        let set = txs.iter().cloned().collect::<HashSet<_>>();
+        assert_eq!(len, set.len());
+        txs_map.push_back(set);
+    };
+
     let mut fetched = {
         let id = if start == 0 {
             BlockId::Number(BlockNumber::Number(U64::zero()))
         } else {
             BlockId::Number(BlockNumber::Number(U64::from(start - 1)))
         };
-        client
+        let block = client
             .block_with_tx_hashes(id)
             .map(|b| BlockInfo {
                 number: b.number.unwrap().as_u64(),
@@ -125,7 +145,9 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
                 transactions: b.transactions,
                 transactions_root: b.transactions_root,
             })
-            .unwrap()
+            .unwrap();
+        build_txs_map(block.transactions.as_slice());
+        block
     };
 
     let range = start..if follow { u64::MAX } else { start + count };
@@ -142,6 +164,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
                 transactions_root: b.transactions_root,
             })
             .unwrap();
+        build_txs_map(current.transactions.as_slice());
         info!("block info => {current}");
         fetched = current;
     }
@@ -200,8 +223,9 @@ fn main() -> anyhow::Result<()> {
             start,
             count,
             follow,
+            checktx,
         }) => {
-            eth_blocks(network.eth_url().as_str(), *timeout, *start, *count, *follow);
+            eth_blocks(network.eth_url().as_str(), *timeout, *start, *count, *follow, *checktx);
             Ok(())
         }
         Some(Commands::Etl {
