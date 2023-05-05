@@ -112,7 +112,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
         panic!("Need a non-zero block count for a non-follow mode");
     }
 
-    let mut build_txs_map = |txs: &[H256]| {
+    let mut build_txs_map = |id, txs: &[H256]| {
         if check_tx == 0 {
             return;
         }
@@ -120,7 +120,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
             .iter()
             .all(|tx| txs_map.iter().all(|set: &HashSet<H256>| !set.contains(tx)))
         {
-            error!("duplicate transaction(s) in previous blocks")
+            error!("duplicate transaction(s) in previous blocks {:?}", id);
         }
 
         if txs_map.len() >= check_tx as usize {
@@ -129,7 +129,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
         let len = txs.len();
         let set = txs.iter().cloned().collect::<HashSet<_>>();
         if len != set.len() {
-            error!("duplicate transactions hash in same block {len} {}", set.len());
+            error!("duplicate transactions hash in same block {:?} {len} {}", id, set.len());
         }
         txs_map.push_back(set);
     };
@@ -151,7 +151,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
                 transactions_root: b.transactions_root,
             })
             .unwrap();
-        build_txs_map(block.transactions.as_slice());
+        build_txs_map(block.number, block.transactions.as_slice());
         block
     };
 
@@ -169,7 +169,7 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
                 transactions_root: b.transactions_root,
             })
             .unwrap();
-        build_txs_map(current.transactions.as_slice());
+        build_txs_map(current.number, current.transactions.as_slice());
         info!("block info => {current}");
         fetched = current;
     }
