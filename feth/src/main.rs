@@ -10,7 +10,7 @@ use std::{
 
 use agent::{parse_call_json, parse_deploy_json, parse_query_json, utils::*, TestClient};
 use commands::*;
-use tracing::info;
+use tracing::{error, info};
 use web3::types::{Address, BlockId, BlockNumber, TransactionId, H256, U256, U64};
 
 fn eth_transaction(network: &str, timeout: Option<u64>, hash: H256) {
@@ -116,16 +116,21 @@ fn eth_blocks(network: &str, timeout: Option<u64>, start: Option<u64>, count: u6
         if check_tx == 0 {
             return;
         }
-        assert!(txs
+        if !txs
             .iter()
-            .all(|tx| { txs_map.iter().all(|set: &HashSet<H256>| !set.contains(tx)) }));
+            .all(|tx| txs_map.iter().all(|set: &HashSet<H256>| !set.contains(tx)))
+        {
+            error!("duplicate transaction(s) in previous blocks")
+        }
 
         if txs_map.len() >= check_tx as usize {
             txs_map.pop_front();
         }
         let len = txs.len();
         let set = txs.iter().cloned().collect::<HashSet<_>>();
-        assert_eq!(len, set.len());
+        if len != set.len() {
+            error!("duplicate transactions hash in same block {len} {}", set.len());
+        }
         txs_map.push_back(set);
     };
 
