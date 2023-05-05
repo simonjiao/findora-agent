@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 web3 = { git = "https://github.com/simonjiao/rust-web3.git", branch = "findora" }
-finutils = { git = "https://github.com/simonjiao/platform.git", branch = "sdk-v2", default-features = false }
-#finutils = { path = "../../platform/finutils", default-features = false }
+finutils = { git = "https://github.com/simonjiao/findora-sdk.git", branch = "sdk-v2", default-features = false }
+#finutils = { path = "../../findora-sdk/finutils", default-features = false }
 tendermint = { git = "https://github.com/FindoraNetwork/tendermint-rs", tag = "v0.19.0a-fk" }
 tendermint-rpc = { git = "https://github.com/FindoraNetwork/tendermint-rs", features = ["http-client", "websocket-client"], tag = "v0.19.0a-fk" }
 #tendermint-rpc = { version = "0.23.0", features = ["http-client", "websocket-client"] }
